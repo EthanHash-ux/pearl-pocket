@@ -252,7 +252,7 @@ public final class PearlApi {
     private static String httpsRequest(String url, String raw) throws Exception {
         URI uri = new URI(url);
         if (!"https".equals(uri.getScheme()) || uri.getUserInfo() != null || uri.getPort() != -1
-                || !("blockbook.pearlresearch.ai".equals(uri.getHost()) || "api.coingecko.com".equals(uri.getHost()) || "api.big.one".equals(uri.getHost()))) {
+                || !("blockbook.pearlresearch.ai".equals(uri.getHost()) || "api.coingecko.com".equals(uri.getHost()) || "api.big.one".equals(uri.getHost()) || "pearl.herominers.com".equals(uri.getHost()))) {
             throw new IllegalArgumentException("仅允许受支持的 HTTPS 数据服务");
         }
         HttpsURLConnection connection = (HttpsURLConnection) uri.toURL().openConnection();
@@ -262,7 +262,7 @@ public final class PearlApi {
             connection.setConnectTimeout(market?6_000:12_000); connection.setReadTimeout(market?8_000:20_000);
             connection.setUseCaches(false); connection.setRequestProperty("Cache-Control","no-cache");
             connection.setRequestProperty("Accept", "application/json");
-            connection.setRequestProperty("User-Agent", "PearlWalletAndroid/0.3");
+            connection.setRequestProperty("User-Agent", "PearlPocketAndroid/0.4");
             if (raw != null) {
                 byte[] data = raw.getBytes(StandardCharsets.US_ASCII);
                 connection.setRequestMethod("POST"); connection.setDoOutput(true);

@@ -4,6 +4,11 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.ContentValues;
+import android.app.Instrumentation;
+import android.graphics.Bitmap;
+import android.net.Uri;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.uiautomator.By;
@@ -94,4 +99,29 @@ public class WalletUiTest {
             finally{java.util.Arrays.fill(unlocked,(byte)0);java.util.Arrays.fill(entropy,(byte)0);}
         }
     }
+    @Test public void contactsPaymentImageAlertsAndProfitTools()throws Exception{
+        fresh();context().getSharedPreferences("public_tools",Context.MODE_PRIVATE).edit().clear().commit();
+        String address="prl1pr6yuq8u2r95wjzzgpdy8cpnncpl7l8zgy6x5q0367pnc53s2famqg7pt74";
+        recover("abandon ".repeat(11)+"about",address,false);
+        tap("⚙\n设置");scrollTo("地址簿");tap("地址簿");tap("添加联系人");text("联系人名称").setText("Emulator Alice");text("联系人完整 Pearl 主网地址").setText(address);hideKeyboard();tap("保存联系人");assertTrue(device().wait(Until.hasObject(By.textContains("Emulator Alice")),5000));tap("关闭");
+        tap("◉\n钱包");tap("↗  发送");tap("从地址簿选择");tap("使用 Emulator Alice");assertEquals(address,text(address).getText());tap("取消");
+        tap("↙  接收");scrollTo("指定收款金额");tap("指定收款金额");text("请求金额（PRL）").setText("1.00000001");hideKeyboard();tap("生成收款请求");scrollTo("复制收款请求");tap("复制收款请求");
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{ClipboardManager c=(ClipboardManager)context().getSystemService(Context.CLIPBOARD_SERVICE);assertEquals(PaymentRequest.encode(address,"1.00000001"),c.getPrimaryClip().getItemAt(0).getText().toString());c.clearPrimaryClip();});tap("关闭");
+        // Return a local public test image through Android's document-picker result contract.
+        ContentValues values=new ContentValues();values.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME,"pearl-public-payment-test.png");values.put(android.provider.MediaStore.Images.Media.MIME_TYPE,"image/png");
+        Uri image=context().getContentResolver().insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values);assertNotNull(image);
+        com.google.zxing.common.BitMatrix bits=new com.google.zxing.MultiFormatWriter().encode(PaymentRequest.encode(address,"1.00000001"),com.google.zxing.BarcodeFormat.QR_CODE,600,600);
+        Bitmap bitmap=Bitmap.createBitmap(600,600,Bitmap.Config.ARGB_8888);for(int y=0;y<600;y++)for(int x=0;x<600;x++)bitmap.setPixel(x,y,bits.get(x,y)?android.graphics.Color.BLACK:android.graphics.Color.WHITE);
+        try(java.io.OutputStream out=context().getContentResolver().openOutputStream(image)){assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG,100,out));}finally{bitmap.recycle();}
+        Instrumentation instrument=InstrumentationRegistry.getInstrumentation();IntentFilter pickerFilter=new IntentFilter(Intent.ACTION_OPEN_DOCUMENT);pickerFilter.addCategory(Intent.CATEGORY_OPENABLE);pickerFilter.addDataType("image/*");Instrumentation.ActivityMonitor monitor=instrument.addMonitor(pickerFilter,new Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,new Intent().setData(image)),true);
+        try{tap("↗  发送");tap("扫描收款二维码");UiObject2 permission=device().wait(Until.findObject(By.res("com.android.permissioncontroller:id/permission_allow_foreground_only_button")),2000);if(permission!=null)permission.click();tap("从图片识别二维码");text("发送 PRL");assertNotNull(device().findObject(By.text(address)));assertNotNull(device().findObject(By.text("1.00000001")));tap("取消");}
+        finally{instrument.removeMonitor(monitor);context().getContentResolver().delete(image,null,null);}
+        tap("⌁\n行情");scrollTo("价格提醒");tap("价格提醒");tap("添加价格提醒");text("目标价格（USDT）").setText("999999");hideKeyboard();tap("保存提醒");
+        UiObject2 allow=device().wait(Until.findObject(By.res("com.android.permissioncontroller:id/permission_allow_button")),2000);if(allow!=null)allow.click();text("价格提醒");assertTrue(device().hasObject(By.textContains("达到 / 高于 999999 USDT")));assertTrue(new PriceAlerts(PublicStore.of(context())).active());tap("删除提醒 999999");text("暂无价格提醒");tap("关闭");
+        tap("◇\n挖矿");tap("挖矿收益计算");String[] hints={"预计费前 PRL / 天","PRL 价格（CNY）","设备功耗（W）","电价（CNY / kWh）","矿池费率（%）","租金（CNY / 天）"};String[] inputs={"10","5","1000","0.5","2","3"};
+        for(int i=0;i<hints.length;i++){scrollToDescription(hints[i]);UiObject2 field=device().findObject(By.desc(hints[i]));assertNotNull(field);field.setText(inputs[i]);hideKeyboard();}
+        scrollTo("计算收益");tap("计算收益");assertTrue(device().wait(Until.hasObject(By.textContains("每天净收益：¥34.00")),5000));tap("关闭");
+    }
+    private void scrollTo(String title)throws Exception{for(int i=0;i<8&&!device().hasObject(By.text(title));i++)device().swipe(device().getDisplayWidth()/2,device().getDisplayHeight()*3/4,device().getDisplayWidth()/2,device().getDisplayHeight()/3,25);text(title);}
+    private void scrollToDescription(String description){for(int i=0;i<8&&!device().hasObject(By.desc(description));i++)device().swipe(device().getDisplayWidth()/2,device().getDisplayHeight()*3/4,device().getDisplayWidth()/2,device().getDisplayHeight()/3,25);}
 }

@@ -10,7 +10,7 @@ import sys
 import zipfile
 
 PROJECT = Path(__file__).resolve().parent.parent
-VERSION = '0.3.1'
+VERSION = '0.4.0'
 TAG = 'v' + VERSION
 ASSETS = [f'pearl-wallet-android-{VERSION}.apk', 'pearl-wallet-android-source.zip',
           'SHA256SUMS', 'TEST_REPORT.md', 'verification.json',

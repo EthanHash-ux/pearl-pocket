@@ -27,6 +27,8 @@ final class WalletFlow {
     private final WalletVault vault;
     private final PendingTransfer pending;
     private final PearlApi api;
+    private final PublicTools publicTools;
+    private String scanAddress="", scanAmount="";
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private AlertDialog dialog;
     private Runnable afterAuth;
@@ -38,7 +40,7 @@ final class WalletFlow {
     private String recoveryAddress = "";
     private final android.os.Handler recoveryTimeout = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable expireRecovery = () -> { clearRecovery(); afterAuth = null; };
-    WalletFlow(Activity a, Host h, PearlApi api) { activity = a; host = h; this.api = api; vault = new WalletVault(a); pending = new PendingTransfer(a); }
+    WalletFlow(Activity a, Host h, PearlApi api) { activity = a; host = h; this.api = api; vault = new WalletVault(a); pending = new PendingTransfer(a); publicTools=new PublicTools(a); }
     boolean exists() { return vault.exists(); }
     String address() throws Exception { return vault.exists() ? vault.metadata().getString("address") : ""; }
     String lastResult() { return lastResult; }
@@ -228,18 +230,28 @@ final class WalletFlow {
         });
     }
     void send() {
+        send("", "");
+    }
+    private void send(String draftAddress,String draftAmount) {
         if (!exists()) { notice("先创建钱包", "创建或恢复手机钱包后即可收发 PRL。"); return; }
         if (busy) { notice("正在处理", "请等待当前操作完成。"); return; }
         try { if (pending.load() != null) { pendingStatus(); return; } } catch (Exception e) { notice("待确认交易需要检查", error(e)); return; }
         if (!backedUp()) { notice("先完成离线备份", "在设置中验证助记词备份后，再进行发送。"); return; }
         LinearLayout view = form(); view.addView(label("仅发送到 Pearl 主网 prl1p 或 prl1z 地址。金额最多 8 位小数，手续费在下一步展示。"));
         EditText to = field("完整 Pearl 主网收款地址", false), amount = field("金额（PRL）", false);
+        to.setText(draftAddress);amount.setText(draftAmount);
         amount.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL); view.addView(to); view.addView(amount);
+        android.widget.Button scan=new android.widget.Button(activity);scan.setText("扫描收款二维码");view.addView(scan);
+        scan.setOnClickListener(v->{scanAddress=to.getText().toString();scanAmount=amount.getText().toString();dismissForScan();activity.startActivityForResult(new Intent(activity,QrScannerActivity.class),QrScannerActivity.REQUEST);});
+        android.widget.Button book=new android.widget.Button(activity);book.setText("从地址簿选择");view.addView(book);book.setOnClickListener(v->publicTools.addressBook(to::setText));
+        android.widget.Button save=new android.widget.Button(activity);save.setText("保存地址到联系人");view.addView(save);save.setOnClickListener(v->{try{publicTools.saveContact(PearlAddress.normalize(to.getText().toString()));}catch(Exception e){to.setError(error(e));}});
         AlertDialog d = new AlertDialog.Builder(activity).setTitle("发送 PRL").setView(view).setNegativeButton("取消", null).setPositiveButton("预览转账", null).create();
         show(d); d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             if (busy) return;
             try {
-                String recipient = PearlAddress.normalize(to.getText().toString()); BigInteger value = PearlAmount.parsePositivePrl(amount.getText().toString());
+                String recipient;
+                try{recipient=PearlAddress.normalize(to.getText().toString());}catch(Exception e){to.setError(error(e));return;}
+                BigInteger value = PearlAmount.parsePositivePrl(amount.getText().toString());
                 d.dismiss(); busy = true; int token = generation; String from = host.address();
                 Toast.makeText(activity, "正在校验余额和手续费…", Toast.LENGTH_LONG).show();
                 worker.execute(() -> {
@@ -251,6 +263,16 @@ final class WalletFlow {
                     finally { busy = false; }
                 });
             } catch (Exception e) { amount.setError(error(e)); }
+        });
+    }
+    private void dismissForScan(){if(dialog!=null){dialog.dismiss();dialog=null;}}
+    void scanResult(int resultCode,Intent data){
+        String draftAddress=scanAddress,draftAmount=scanAmount;scanAddress="";scanAmount="";
+        activity.getWindow().getDecorView().post(()->{
+            if(!active)return;
+            if(resultCode!=Activity.RESULT_OK||data==null){send(draftAddress,draftAmount);return;}
+            try{PaymentRequest request=PaymentRequest.parse(data.getStringExtra(QrScannerActivity.PAYLOAD));send(request.address,request.amount==null?draftAmount:PearlAmount.format(request.amount));}
+            catch(Exception e){notice("无法使用收款二维码",error(e));}
         });
     }
     private void review(JSONObject quote) {
@@ -302,6 +324,7 @@ final class WalletFlow {
     synchronized void resume() { active = true; recoveryTimeout.removeCallbacks(expireRecovery); }
     synchronized void pause() {
         active = false; generation++;
+        publicTools.pause();
         if (dialog != null) { dialog.dismiss(); dialog = null; }
         if (!authWaiting) { afterAuth = null; clearRecovery(); }
         else if (recoveryEntropy != null) recoveryTimeout.postDelayed(expireRecovery, 120_000);
