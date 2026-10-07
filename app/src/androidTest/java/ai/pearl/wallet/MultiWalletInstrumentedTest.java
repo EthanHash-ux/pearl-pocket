@@ -76,7 +76,7 @@ public class MultiWalletInstrumentedTest {
             JSONObject tampered = new JSONObject(new String(secondFile, StandardCharsets.UTF_8));
             tampered.put("walletSlot", WalletCatalog.LEGACY);
             Files.write(vaultFile(context, WalletCatalog.LEGACY).toPath(), tampered.toString().getBytes(StandardCharsets.UTF_8));
-            assertThrows(IllegalArgumentException.class, () -> legacy.unlock(firstPassword));
+            assertThrows("Even the correct source password cannot unlock a relabeled wallet", IllegalArgumentException.class, () -> legacy.unlock(secondPassword));
             Files.write(vaultFile(context, WalletCatalog.LEGACY).toPath(), original);
             // Lost public names/selection cannot orphan encrypted wallet files.
             assertTrue(new File(context.getNoBackupFilesDir(), "wallet-catalog.json").delete());
