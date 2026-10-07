@@ -283,26 +283,54 @@ final class WalletFlow {
             catch(Exception e){notice("无法使用收款二维码",error(e));}
         });
     }
-    private void review(JSONObject quote) {
+    void bridge(BridgeApi.MintPlan bridge) {
+        if(!exists()){notice("先创建钱包","创建或恢复手机钱包后才能向桥转入 PRL。");return;}
+        if(busy||authWaiting)return;
+        if(!backedUp()){notice("先完成离线备份","完成助记词备份验证后再操作。");return;}
+        try{if(pending.load()!=null){pendingStatus();return;}}catch(Exception e){notice("待确认交易需要检查",error(e));return;}
+        busy=true;int token=generation;String from=host.address();
+        worker.execute(()->{try{
+            new BridgeApi().recheck(bridge,new BridgeBook(PublicStore.of(activity)));
+            JSONObject payment=api.payment(from,bridge.deposit,bridge.quote.amount);
+            JSONObject quote=NativeCore.call(new JSONObject().put("action","plan").put("payment",payment));
+            ui(token,()->review(quote,bridge));
+        }catch(Exception e){ui(token,()->notice("无法预览跨链转入",error(e)));}finally{busy=false;}});
+    }
+    private void review(JSONObject quote) { review(quote,null); }
+    private void review(JSONObject quote,BridgeApi.MintPlan bridge) {
         try {
             JSONObject payment = quote.getJSONObject("payment");
             String message = "收款地址\n" + payment.getString("to") + "\n\n金额  " + PearlAmount.format(new BigInteger(payment.getString("amount"))) + " PRL\n手续费  " + PearlAmount.format(new BigInteger(quote.getString("fee"))) + " PRL\n合计  " + PearlAmount.format(new BigInteger(payment.getString("amount")).add(new BigInteger(quote.getString("fee")))) + " PRL"+(payment.optBoolean("sweep",false)?"\n发送全部可用余额（已扣手续费），不生成找零。未确认与未成熟奖励不参与。":"")+"\n\n预览有效期 5 分钟。确认后在手机签名并提交到 Pearl 主网。";
-            show(new AlertDialog.Builder(activity).setTitle("确认转账").setMessage(message).setNegativeButton("取消", null)
-                    .setPositiveButton("验证并发送", (d,w) -> unlock("确认并发送这笔转账", entropy -> {
+            if(bridge!=null)message += "\n\n"+bridge.summary()+"\n签名前再次核对桥报价。核对后 2 分钟内完成验证；桥状态仍可能随后变化。";
+            final long[] bridgeCheckedAt={0};
+            Runnable approve=()->unlock("确认并发送这笔转账", entropy -> {
                         if (pending.load() != null) throw new IllegalArgumentException("已有交易等待确认");
+                        if(bridge!=null){
+                            if(bridgeCheckedAt[0]<=0||android.os.SystemClock.elapsedRealtime()-bridgeCheckedAt[0]>120_000)throw new IllegalArgumentException("跨链核对已过期，请重新报价");
+                            if(!bridge.deposit.equals(payment.getString("to"))||!bridge.quote.amount.toString().equals(payment.getString("amount")))throw new IllegalArgumentException("跨链交易与已确认报价不一致");
+                        }
                         JSONObject signed = NativeCore.sign(entropy, quote);
                         signed.put("to", payment.getString("to")).put("amount", payment.getString("amount"));
+                        if(bridge!=null){new BridgeBook(PublicStore.of(activity)).save(true,signed.getString("txid"),bridge.eth);signed.put("bridgeEth",bridge.eth);}
                         pending.save(signed);
                         // Network submission is queued after unlock's finally wipes entropy/password.
                         int token = generation; worker.execute(() -> submit(signed, token));
-                    })).create());
+                    });
+            show(new AlertDialog.Builder(activity).setTitle(bridge==null?"确认转账":"确认 PRL 转入跨链桥").setMessage(message).setNegativeButton("取消", null)
+                    .setPositiveButton("验证并发送", (d,w) -> {
+                        if(bridge==null){approve.run();return;}
+                        if(busy||authWaiting)return;busy=true;int token=generation;
+                        worker.execute(()->{try{new BridgeApi().recheck(bridge,new BridgeBook(PublicStore.of(activity)));
+                            ui(token,()->{busy=false;bridgeCheckedAt[0]=android.os.SystemClock.elapsedRealtime();approve.run();});
+                        }catch(Exception e){ui(token,()->notice("跨链核对未通过",error(e)));}finally{busy=false;}});
+                    }).create());
         } catch (Exception e) { notice("预览失败", error(e)); }
     }
     private void submit(JSONObject signed, int token) {
         busy = true;
         try {
             String id = api.broadcast(signed); pending.clear(); lastResult = "已提交 · " + id;
-            ui(token, () -> { host.changed(); notice("交易已提交", "等待主网确认。\n\n交易 ID\n" + id); });
+            ui(token, () -> { host.changed(); notice(signed.has("bridgeEth")?"PRL 转入交易已提交":"交易已提交", "等待主网确认。\n\n交易 ID\n" + id+(signed.has("bridgeEth")?"\n\nPRL 转账确认后仍需等待桥铸造 WPRL。请在行情的跨链进度查看；此次提交不代表跨链完成。":"")); });
         } catch (Exception e) {
             lastResult = "结果待确认";
             ui(token, () -> { host.changed(); notice("结果待确认", "已保存原签名交易。网络失败可能发生在服务收到交易之后，请在设置中查询结果，或重发同一交易。\n\n" + error(e)); });

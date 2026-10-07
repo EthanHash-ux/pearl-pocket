@@ -4,7 +4,7 @@ Pearl Pocket（掌珠钱包）是基于 Pearl Research Labs 官方协议代码�
 
 ## 安装与使用
 
-当前版本 **0.6.0**。GitHub 安装包位于本仓库 **Releases → v0.6.0 → Assets**，文件名为 `pearl-wallet-android-0.6.0.apk`；本地构建文件保存在 `artifacts/`。最低 Android 8.0，支持 ARM64 手机与 x86_64 模拟器。此包关闭 Android 调试权限，使用独立本地开发证书签名；仍是未经独立安全审计的开发测试版本。
+当前版本 **0.7.0**。GitHub 安装包位于本仓库 **Releases → v0.7.0 → Assets**，文件名为 `pearl-wallet-android-0.7.0.apk`；本地构建文件保存在 `artifacts/`。最低 Android 8.0，支持 ARM64 手机与 x86_64 模拟器。此包关闭 Android 调试权限，使用独立本地开发证书签名；仍是未经独立安全审计的开发测试版本。
 
 1. 在手机设置中启用锁屏 PIN 或密码，然后打开应用。
 2. 选择「创建手机钱包」，验证手机解锁，设置至少 10 个字符的钱包密码。
@@ -43,12 +43,12 @@ Pearl Pocket（掌珠钱包）是基于 Pearl Research Labs 官方协议代码�
 
 ## 原生界面预览
 
-0.6.0 增加深色模式、观察地址、完整历史与导出、个人矿工监控、发送全部余额、收款通知和桌面价格组件。保留统一原生布局、图标、表单与助记词编号网格。下面是 Android 15 模拟器实际运行截图，使用公开的零熵测试向量钱包，不包含真实资产或私钥。
+0.7.0 在 0.6.0 功能上增加跨链与价差工作台；0.6.0 增加深色模式、观察地址、完整历史与导出、个人矿工监控、发送全部余额、收款通知和桌面价格组件。保留统一原生布局、图标、表单与助记词编号网格。下面是 Android 15 模拟器实际运行截图，使用公开的零熵测试向量钱包，不包含真实资产或私钥。
 
 | 钱包首页 | 实时行情 |
 | --- | --- |
-| ![钱包首页](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.6.0/ui-wallet.png) | ![实时行情](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.6.0/ui-market.png) |
-| ![深色钱包](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.6.0/ui-wallet-dark.png) | ![深色行情](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.6.0/ui-market-dark.png) |
+| ![钱包首页](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.7.0/ui-wallet.png) | ![实时行情](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.7.0/ui-market.png) |
+| ![深色钱包](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.7.0/ui-wallet-dark.png) | ![深色行情](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.7.0/ui-market-dark.png) |
 
 [设计说明与下一步功能](docs/DESIGN.md)。余额隐藏同步遮盖无障碍朗读内容；发送审核仍显示实际金额。
 
@@ -62,7 +62,7 @@ Pearl Pocket（掌珠钱包）是基于 Pearl Research Labs 官方协议代码�
 
 Keystore 保护的是加密密钥；Pearl 的 Schnorr 签名在应用进程中完成，签名期间种子与私钥会短暂进入内存。手机被控制或助记词泄露时，不能保证资金安全。
 
-联网只传输公开地址、行情请求和签名交易；不传输助记词、种子、私钥或钱包密码。HTTPS/WSS 使用 Android 默认证书和主机名验证，禁用明文请求和跳转，仅允许官方 Blockbook、BigONE、CoinGecko 和 HeroMiners Pearl 域名。HeroMiners 只查询公开矿池总统计，不附带钱包地址。公开行情订阅不包含钱包地址，也不需要交易所账户或 API 密钥。该版本依赖官方索引服务判断余额、确认和未花费状态，没有实现独立 SPV 验证；服务可看到查询的地址，也可影响可用性与建议费率。手续费会在签名前展示。
+联网只传输公开地址、行情请求和签名交易；不传输助记词、种子、私钥或钱包密码。HTTPS/WSS 使用 Android 默认证书和主机名验证，禁用明文请求和跳转，允许官方 Blockbook、BigONE、CoinGecko、HeroMiners Pearl 及新增只读桥 / Lighter / 固定 Ethereum RPC 服务。个人矿工查询会发送公开地址。公开行情订阅不包含钱包地址，也不需要交易所账户或 API 密钥。新增跨链与价差只读服务及 Ethereum RPC 的严格方法限制见 [跨链说明](docs/CROSS_CHAIN.md)。该版本依赖官方索引服务判断余额、确认和未花费状态，没有实现独立 SPV 验证；服务可看到查询的地址，也可影响可用性与建议费率。手续费会在签名前展示。
 
 行情在应用前台即时连接，推送每次交易所 ticker 更新；后台断开，回到前台重新订阅；用户配置价格提醒后，另由系统后台任务定期查询公开报价。断线采用递增间隔重连，同时每 15 秒刷新 REST 行情；没有新的推送超过 45 秒也会刷新。页面明确显示实时推送、定时刷新、参考行情或过期状态，以及本机接收时间。交易所的成交价格在没有新成交时可能保持不变。
 
@@ -113,7 +113,7 @@ python3 scripts/package_apk.py --sdk /path/to/android-sdk
 
 私有 APK 签名证书与密码保存在构建机器 `~/.pearl-wallet-build/signing`（目录权限 700，文件权限 600），不会打入 APK 或源码。保留该证书才能升级同一安装；正式发行需自行管理发布证书。
 
-专用模拟器上可额外验证旧版有钱包时的覆盖升级：先构建并签名当前 APK，再执行 `python3 scripts/check_release_upgrade.py --reset-test-wallet --previous-apk artifacts/pearl-wallet-android-0.5.0.apk`。脚本会删除模拟器中本应用的测试数据，在旧版创建公开恢复向量钱包，覆盖安装新版后验证地址、备份状态、设备验证和密码解密。`WalletUpgradeTest` 只在该显式流程下运行；常规仪器测试会跳过它。
+专用模拟器上可额外验证旧版有钱包时的覆盖升级：先构建并签名当前 APK，再执行 `python3 scripts/check_release_upgrade.py --reset-test-wallet --previous-apk artifacts/archive-0.6.0/pearl-wallet-android-0.6.0.apk`。脚本会删除模拟器中本应用的测试数据，在旧版创建公开恢复向量钱包，覆盖安装新版后验证地址、备份状态、设备验证和密码解密。`WalletUpgradeTest` 只在该显式流程下运行；常规仪器测试会跳过它。
 
 ## 验证结果与限制
 
@@ -135,7 +135,7 @@ python3 scripts/package_apk.py --sdk /path/to/android-sdk
 
 ## GitHub 发布
 
-发布说明见 [0.6.0 Release notes](docs/releases/v0.6.0.md)。仓库保存本应用完整 Java/Go/JNI 源码、测试、构建脚本和依赖版本；生成的 APK、原生库、SDK、缓存、本机路径和 APK 签名密钥不提交到 Git。
+发布说明见 [0.7.0 Release notes](docs/releases/v0.7.0.md)。仓库保存本应用完整 Java/Go/JNI 源码、测试、构建脚本和依赖版本；生成的 APK、原生库、SDK、缓存、本机路径和 APK 签名密钥不提交到 Git。
 
 将已经验证的安装包、当前源码包、校验文件和测试报告保存在 `artifacts/` 后，可使用 GitHub CLI 登录并运行：
 
@@ -145,7 +145,7 @@ python3 scripts/publish_release.py --repo YOUR_ACCOUNT/pearl-pocket --dry-run
 python3 scripts/publish_release.py --repo YOUR_ACCOUNT/pearl-pocket
 ```
 
-脚本只向指定仓库推送当前 `main` 和 `v0.6.0` 标签，并创建开发测试版 Release；远端标签或同名附件不一致时停止，避免覆盖已经发布的版本。仓库需要先存在，且当前 GitHub 账号拥有写入权限。脚本不会重新生成签名证书。
+脚本只向指定仓库推送当前 `main` 和 `v0.7.0` 标签，并创建开发测试版 Release；远端标签或同名附件不一致时停止，避免覆盖已经发布的版本。仓库需要先存在，且当前 GitHub 账号拥有写入权限。脚本不会重新生成签名证书。
 
 ## 0.6.0 新功能与使用范围
 
@@ -159,3 +159,15 @@ python3 scripts/publish_release.py --repo YOUR_ACCOUNT/pearl-pocket
 - 设置 → 启用收款通知：首次查询静默建立基线，后续发现正净额收款和首次确认分别提醒。后台约 15 分钟查最新 100 笔，前台随地址刷新查最新记录；大量交易可能漏检，到账以完整历史为准。系统省电、网络、强制停止会影响检查。后台仅使用公开地址，不读取钱包密钥。
 
 [应用方向：商家收款、矿工账本与团队看板](docs/APP_SCENARIOS.md)。上述新功能已经实现；应用方向文档明确区分现有流程和后续产品设计。
+
+## 0.7.0 跨链与价差
+
+行情 → 打开跨链与价差工作台。提供社区 PearlBridge PRL/WPRL 双向真实报价、额度和通道；PRL 转入使用原有手机钱包签名，WPRL 赎回使用外部 Ethereum 钱包。保存公开 Ethereum 地址，可查 WPRL/ETH 余额与桥进度。
+
+接入 Lighter 固定 PRL 永续市场 4097 与 Uniswap V3 WPRL/USDT 固定单池的指定数量链上报价。可试算双向跨链现货成本、现货加永续空头的平仓和正负资金费情景；必须填写其它费用预算，USDC/USDT 为显式假设。暂停、错误资产或合约、地址变化、过期报价、盘口不足时拒绝继续。
+
+Ethereum 和 Lighter 交易由外部钱包 / 账户签名，本应用没有自动套利下单或内置 Ethereum 私钥。桥是独立实验性项目；价差不是已实现利润，跨链耗时、强平和资金费变化会影响结果。
+
+[完整流程、公式与协议研究](docs/CROSS_CHAIN.md)。
+
+![原生跨链工作台](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.7.0/ui-cross-chain.png)

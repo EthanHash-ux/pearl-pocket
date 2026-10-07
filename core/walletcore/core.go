@@ -24,11 +24,40 @@ import (
 	"github.com/pearl-research-labs/pearl/node/txscript"
 	"github.com/pearl-research-labs/pearl/node/wire"
 	bip39 "github.com/tyler-smith/go-bip39"
+	"golang.org/x/crypto/sha3"
 )
 
 const Path = "m/86'/808276'/0'/0/0"
 const MaxMoney int64 = 210000000000000000
 const Dust int64 = 333
+
+// EthereumAddress validates an external public address, including EIP-55 when
+// mixed case is supplied. It does not derive or use an Ethereum private key.
+func EthereumAddress(input string) (string, error) {
+	input = strings.TrimSpace(input)
+	if len(input) != 42 || !strings.HasPrefix(input, "0x") {
+		return "", errors.New("请输入完整的 Ethereum 主网地址")
+	}
+	raw, err := hex.DecodeString(input[2:])
+	if err != nil || bytes.Equal(raw, make([]byte, 20)) {
+		return "", errors.New("Ethereum 地址无效")
+	}
+	lower := strings.ToLower(input[2:])
+	h := sha3.NewLegacyKeccak256()
+	h.Write([]byte(lower))
+	digest := hex.EncodeToString(h.Sum(nil))
+	checksummed := []byte(lower)
+	for i, c := range checksummed {
+		if c >= 'a' && c <= 'f' && digest[i] >= '8' {
+			checksummed[i] = c - 32
+		}
+	}
+	result := "0x" + string(checksummed)
+	if input[2:] != lower && input[2:] != strings.ToUpper(lower) && input != result {
+		return "", errors.New("Ethereum 地址校验和不匹配，请重新复制")
+	}
+	return result, nil
+}
 
 type UTXO struct {
 	TxID          string `json:"txid"`
@@ -375,6 +404,10 @@ func Execute(input string) (output string) {
 		return `{"error":"请求格式无效"}`
 	}
 	switch r.Action {
+	case "ethaddress":
+		var address string
+		address, e = EthereumAddress(r.Raw)
+		result = map[string]string{"address": address}
 	case "generate":
 		b := make([]byte, 32)
 		_, e = rand.Read(b)

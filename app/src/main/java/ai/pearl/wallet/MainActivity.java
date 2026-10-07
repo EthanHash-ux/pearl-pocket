@@ -69,6 +69,7 @@ public final class MainActivity extends Activity {
     private SharedPreferences preferences;
     private WalletFlow walletFlow;
     private PublicTools publicTools;
+    private CrossChainTools crossChainTools;
     private MiningTools miningTools;private WatchTools watchTools;private HistoryTools historyTools;private String observedAddress="";
     private MiningApi.Stats miningStats;
     private TextView miningText;
@@ -106,6 +107,7 @@ public final class MainActivity extends Activity {
             @Override public void changed() { loadWallet(); render(); refresh(); }
             @Override public String address() { return address; }
         }, api);
+        crossChainTools=new CrossChainTools(this,()->address,this::observing,()->hideBalances,plan->{if(observing())walletFlow.notice("观察地址不能发送","请先切换到手机钱包。");else walletFlow.bridge(plan);});
         loadWallet();if(state==null)selectReceiptAddress(getIntent());
         readPriceCache();
         marketFeed = new MarketFeed(api, new MarketFeed.Listener() {
@@ -236,6 +238,7 @@ public final class MainActivity extends Activity {
 
     private void renderMarket(){
         heading("市场行情","实时价格、历史走势与目标价提醒");renderPriceCard(true);gap(content,16);
+        LinearLayout cross=card(WHITE);cross.addView(text("跨链与价差",19,INK,true));gap(cross,8);cross.addView(text("PRL ↔ WPRL 桥报价 · Lighter 永续 · 真实盘口成本测算",13,MUTED,false));gap(cross,12);cross.addView(button("打开跨链与价差工作台",WHITE,GREEN,v->crossChainTools.show()));content.addView(cross);gap(content,16);
         LinearLayout alert=card(WHITE);LinearLayout line=row();ImageView icon=new ImageView(this);icon.setImageDrawable(PearlDesign.icon(this,"bell",GREEN,25));icon.setPadding(dp(10),dp(10),dp(10),dp(10));icon.setBackground(background(PALE,0,14));line.addView(icon,new LinearLayout.LayoutParams(dp(46),dp(46)));
         LinearLayout words=column();words.setPadding(dp(12),0,0,0);words.addView(text("价格提醒",16,INK,true));gap(words,4);words.addView(text("到达目标价，通知你",12,MUTED,false));weighted(line,words);line.addView(iconButton("chevron","管理价格提醒",MUTED,WHITE,()->publicTools.priceAlerts()),new LinearLayout.LayoutParams(dp(40),dp(40)));line.setOnClickListener(v->publicTools.priceAlerts());alert.addView(line);content.addView(alert);gap(content,16);
         LinearLayout about=card(PALE);about.addView(text("让计算创造价值",17,GREEN,true));gap(about,8);about.addView(text("Pearl 是采用有用工作证明的独立 L1 网络。PRL 是它的原生资产。",13,INK,false));gap(about,12);about.addView(button("了解 Pearl",GREEN,WHITE,v->open("https://pearlresearch.ai")));content.addView(about);
@@ -283,7 +286,7 @@ public final class MainActivity extends Activity {
         if(address.isEmpty()){wallet.addView(button("创建手机钱包",WHITE,GREEN,v->walletFlow.setup(false)));gap(wallet,8);wallet.addView(button("恢复已有手机钱包",GREEN,PALE,v->walletFlow.setup(true)));}
         else{wallet.addView(button(walletFlow.backedUp()?"查看离线备份":"完成助记词备份",GREEN,PALE,v->walletFlow.backup()));gap(wallet,8);wallet.addView(button("查询或重发待确认交易",INK,BG,v->walletFlow.pendingStatus()));gap(wallet,8);wallet.addView(button("钱包恢复兼容性",MUTED,WHITE,v->walletFlow.notice("钱包恢复兼容性","支持本应用 BIP39 英文 12 / 15 / 18 / 21 / 24 词，BIP39 附加口令为空。使用 Pearl 主网 Taproot 地址，固定收款与找零地址。尚不支持 Oyster XMSS 全钱包恢复。")));}
         content.addView(wallet);gap(content,16);LinearLayout tools=card(WHITE);tools.addView(text("日常工具",16,INK,true));gap(tools,12);tools.addView(button("桌面价格小组件",GREEN,BG,v->PriceWidget.pin(this)));gap(tools,8);tools.addView(button(preferences.getBoolean("receipt_notifications",false)?"关闭收款通知":"启用收款通知",GREEN,BG,v->receiptSettings()));gap(tools,8);tools.addView(button("观察地址管理",GREEN,BG,v->watchTools.show()));gap(tools,8);tools.addView(button("完整交易历史",GREEN,BG,v->historyTools.show(viewAddress())));gap(tools,8);tools.addView(button("地址簿",GREEN,BG,v->publicTools.addressBook(null)));gap(tools,8);tools.addView(button("价格提醒",GREEN,BG,v->publicTools.priceAlerts()));content.addView(tools);gap(content,16);
-        LinearLayout sources=card(WHITE);sources.addView(text("关于掌珠钱包",16,INK,true));gap(sources,8);sources.addView(text("Pearl Pocket · 0.6.0\nPearl Mainnet · 手机独立钱包",13,MUTED,false));gap(sources,14);sources.addView(button("数据来源",INK,BG,v->walletFlow.notice("数据来源","链上：Pearl 官方 Blockbook\n行情：BigONE PRL/USDT 实时推送\n汇率 / 备用参考：CoinGecko\n矿池：HeroMiners 公开统计")));gap(sources,8);sources.addView(button("查看掌珠钱包源码",GREEN,WHITE,v->open("https://github.com/EthanHash-ux/pearl-pocket")));content.addView(sources);
+        LinearLayout sources=card(WHITE);sources.addView(text("关于掌珠钱包",16,INK,true));gap(sources,8);sources.addView(text("Pearl Pocket · 0.7.0\nPearl Mainnet · 手机独立钱包",13,MUTED,false));gap(sources,14);sources.addView(button("数据来源",INK,BG,v->walletFlow.notice("数据来源","链上：Pearl 官方 Blockbook\n行情：BigONE PRL/USDT 实时推送\n汇率 / 备用参考：CoinGecko\n矿池：HeroMiners 公开统计\n跨链：社区 PearlBridge 公共 API\n永续：Lighter PRL 市场 4097\nEthereum：Publicnode 固定只读 RPC / Uniswap V3 报价")));gap(sources,8);sources.addView(button("查看掌珠钱包源码",GREEN,WHITE,v->open("https://github.com/EthanHash-ux/pearl-pocket")));content.addView(sources);
     }
 
     private void transactionDetail(PearlApi.Transaction tx){
@@ -486,6 +489,6 @@ public final class MainActivity extends Activity {
     private void open(String url) { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
     @Override protected void onSaveInstanceState(Bundle state){state.putString("page",page);state.putInt("days",days);state.putString("transaction_filter",transactionFilter);super.onSaveInstanceState(state);}
     @Override public void onResume() { super.onResume(); foreground = true; AlertNotifications.schedule(this);ReceiptNotifications.schedule(this);if (marketFeed != null) marketFeed.start(); handler.removeCallbacks(priceClock); handler.post(priceClock); handler.removeCallbacks(chartPoll); handler.postDelayed(chartPoll, 60_000); if (walletFlow != null) { walletFlow.resume(); loadWallet(); render(); } handler.removeCallbacks(poll); handler.postDelayed(poll, 90_000); updateLabels(); }
-    @Override public void onPause() { foreground = false; if(receiveDialog!=null){receiveDialog.dismiss();receiveDialog=null;}if(publicTools!=null)publicTools.pause();if(watchTools!=null)watchTools.pause();if(miningTools!=null)miningTools.pause();if(historyTools!=null)historyTools.pause();if (marketFeed != null) marketFeed.stop(); handler.removeCallbacks(priceClock); handler.removeCallbacks(chartPoll); if (walletFlow != null) walletFlow.pause(); handler.removeCallbacks(poll); super.onPause(); }
-    @Override public void onDestroy() { if (marketFeed != null) marketFeed.close(); handler.removeCallbacks(priceClock); handler.removeCallbacks(chartPoll); if (walletFlow != null) walletFlow.close(); handler.removeCallbacks(poll); accountGeneration++; chartGeneration++;if(historyTools!=null)historyTools.close();if(miningTools!=null)miningTools.close();executor.shutdownNow(); super.onDestroy(); }
+    @Override public void onPause() { foreground = false; if(receiveDialog!=null){receiveDialog.dismiss();receiveDialog=null;}if(publicTools!=null)publicTools.pause();if(crossChainTools!=null)crossChainTools.pause();if(watchTools!=null)watchTools.pause();if(miningTools!=null)miningTools.pause();if(historyTools!=null)historyTools.pause();if (marketFeed != null) marketFeed.stop(); handler.removeCallbacks(priceClock); handler.removeCallbacks(chartPoll); if (walletFlow != null) walletFlow.pause(); handler.removeCallbacks(poll); super.onPause(); }
+    @Override public void onDestroy() { if (marketFeed != null) marketFeed.close(); handler.removeCallbacks(priceClock); handler.removeCallbacks(chartPoll); if (walletFlow != null) walletFlow.close(); handler.removeCallbacks(poll); accountGeneration++; chartGeneration++;if(historyTools!=null)historyTools.close();if(miningTools!=null)miningTools.close();if(crossChainTools!=null)crossChainTools.close();executor.shutdownNow(); super.onDestroy(); }
 }

@@ -39,7 +39,7 @@ public class WalletUiTest {
     private UiObject2 text(String text){String plain=text.replaceAll("^[^\\p{L}\\p{N}]+","");UiObject2 item=device().wait(Until.findObject(By.text(Pattern.compile(Pattern.quote(text)+"|"+Pattern.quote(plain)))),30_000);assertNotNull("Expected UI control is missing: "+text,item);return item;}
     private void tap(String text){text(text).click();}
     private void authenticate(){UiObject2 pin=device().wait(Until.findObject(By.clazz("android.widget.EditText")),15_000);assertNotNull("System credential entry is missing",pin);pin.setText("24682468");device().pressEnter();}
-    private void hideKeyboard(){if(device().hasObject(By.pkg("com.google.android.inputmethod.latin")))device().pressBack();}
+    private void hideKeyboard(){try{if(device().executeShellCommand("dumpsys input_method").contains("mInputShown=true"))device().pressBack();}catch(java.io.IOException e){throw new AssertionError(e);}}
     private void passwords(){text("新钱包密码（至少 10 个字符）").setText(password);text("再次输入密码").setText(password);hideKeyboard();}
     private void fresh()throws Exception{
         assertEquals("1",device().executeShellCommand("getprop ro.kernel.qemu").trim());
@@ -122,8 +122,8 @@ public class WalletUiTest {
         long now=System.currentTimeMillis()/1000;assertEquals(1,savedAlerts.claim(new java.math.BigDecimal("1000000"),now,now,true).size());tap("关闭");tap("价格提醒");scrollTo("重新启用 999999");tap("重新启用 999999");text("重新启用价格提醒？");tap("重新启用");assertTrue(device().wait(Until.hasObject(By.textContains("等待触发")),5000));assertTrue(savedAlerts.active());
         tap("删除提醒 999999");text("暂无价格提醒");tap("关闭");
         tap("◇\n挖矿");scrollTo("挖矿收益计算");tap("挖矿收益计算");String[] hints={"预计费前 PRL / 天","PRL 价格（CNY）","设备功耗（W）","电价（CNY / kWh）","矿池费率（%）","租金（CNY / 天）"};String[] inputs={"10","5","1000","0.5","2","3"};
-        for(int i=0;i<hints.length;i++){scrollToDescription(hints[i]);UiObject2 field=device().findObject(By.desc(hints[i]));assertNotNull(field);field.setText(inputs[i]);hideKeyboard();}
-        scrollTo("计算收益");tap("计算收益");assertTrue(device().wait(Until.hasObject(By.textContains("每天净收益：¥34.00")),5000));tap("关闭");
+        for(int i=0;i<hints.length;i++){scrollToDescription(hints[i]);UiObject2 field=device().findObject(By.desc(hints[i]));assertNotNull(field);field.setText(inputs[i]);assertEquals("Public calculator input differs: "+hints[i],inputs[i],field.getText());hideKeyboard();}
+        scrollTo("计算收益");device().waitForIdle();new androidx.test.uiautomator.UiScrollable(new androidx.test.uiautomator.UiSelector().scrollable(true)).scrollToEnd(8);device().waitForIdle();tap("计算收益");boolean calculated=device().wait(Until.hasObject(By.textContains("每天净收益：¥34.00")),5000);StringBuilder diagnostic=new StringBuilder();for(UiObject2 item:device().findObjects(By.clazz("android.widget.TextView")))diagnostic.append(item.getText()).append(" | ");assertTrue("Public mining calculator: "+diagnostic,calculated);tap("关闭");
     }
     @Test public void balancePrivacyPersistsAndContactSearchKeepsSelectionValid()throws Exception{
         fresh();String address="prl1pr6yuq8u2r95wjzzgpdy8cpnncpl7l8zgy6x5q0367pnc53s2famqg7pt74";recover("abandon ".repeat(11)+"about",address,false);

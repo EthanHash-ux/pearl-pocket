@@ -14,6 +14,8 @@ public final class PriceWidget extends AppWidgetProvider {
       new java.util.concurrent.atomic.AtomicBoolean();
 
   static void cache(Context c, BigDecimal price, BigDecimal change, long at, boolean force) {
+    // A USD/CNY-only fallback must neither crash nor overwrite a USDT quote.
+    if (price == null || change == null || price.signum() <= 0 || at <= 0) return;
     synchronized (PriceWidget.class) {
       if (!force && at - written < 60) return;
       written = at;
