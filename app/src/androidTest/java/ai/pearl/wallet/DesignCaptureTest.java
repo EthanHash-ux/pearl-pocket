@@ -72,6 +72,7 @@ public class DesignCaptureTest {
       device.wait(Until.hasObject(By.textContains("接收 ")), 30000);
       Thread.sleep(600);
       capture(device, new File(output, "ui-mining.png"));
+      captureFortune(instrument, activity, device, new File(output, "ui-fortune.png"));
       tap(device, "设置");
       Thread.sleep(400);
       capture(device, new File(output, "ui-settings.png"));
@@ -167,5 +168,57 @@ public class DesignCaptureTest {
     assertFalse(device.hasObject(By.text("离线助记词备份")));
     assertFalse(device.hasObject(By.text("恢复手机钱包")));
     assertTrue(device.takeScreenshot(output));
+  }
+
+  private void captureFortune(
+      Instrumentation instrument, Activity activity, UiDevice device, File output)
+      throws Exception {
+    java.lang.reflect.Field field = MainActivity.class.getDeclaredField("fortuneTools");
+    field.setAccessible(true);
+    FortuneTools tools = (FortuneTools) field.get(activity);
+    instrument.runOnMainSync(() -> tools.detail("PearlFortune 矿池", ""));
+    java.lang.reflect.Field df = FortuneTools.class.getDeclaredField("dialog");
+    df.setAccessible(true);
+    android.app.AlertDialog dialog = (android.app.AlertDialog) df.get(tools);
+    assertNotNull(dialog);
+    try {
+      assertTrue(
+          (dialog.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0);
+      instrument.runOnMainSync(
+          () -> dialog.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE));
+      assertTrue(device.wait(Until.hasObject(By.textContains("算力更新")), 40000));
+      Thread.sleep(400);
+      capture(device, output);
+    } finally {
+      instrument.runOnMainSync(
+          () -> {
+            dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            dialog.dismiss();
+          });
+    }
+    int[] ids = MiningWidget.ids(activity);
+    assertTrue("Capture an actual launcher widget", ids.length > 0);
+    MiningWidget.Config config = new MiningWidget.Config("PearlFortune · 矿池", "");
+    MiningWidget.save(activity, ids[0], config);
+    MiningWidgetJob.cancel(activity);
+    Thread.sleep(500);
+    FortuneApi.Snapshot data = new FortuneApi().fetch("");
+    MiningWidget.result(activity, ids[0], config, data, "");
+    MarketQuote q = new PearlApi().marketQuote();
+    PriceWidget.cache(activity, q.usdt, q.change24h, q.receivedAt, true);
+    device.pressHome();
+    UiObject2 widget =
+        device.wait(Until.findObject(By.res(activity.getPackageName(), "mw_name")), 10000);
+    for (int i = 0; i < 4 && widget == null; i++) {
+      device.swipe(950, 1200, 150, 1200, 20);
+      widget = device.wait(Until.findObject(By.res(activity.getPackageName(), "mw_name")), 2000);
+    }
+    assertNotNull("Launcher widget is displayed", widget);
+    Thread.sleep(400);
+    capture(device, new File(output.getParentFile(), "ui-mining-widget.png"));
+    activity.startActivity(
+        new Intent(activity, MainActivity.class)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+    assertTrue(device.wait(Until.hasObject(By.text("掌珠钱包")), 10000));
   }
 }

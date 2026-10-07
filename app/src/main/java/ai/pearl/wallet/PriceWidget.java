@@ -19,6 +19,7 @@ public final class PriceWidget extends AppWidgetProvider {
     synchronized (PriceWidget.class) {
       if (!force && at - written < 60) return;
       written = at;
+      MiningWidget.prefs(c).edit().putBoolean("price_error", false).apply();
       c.getSharedPreferences("price_widget", 0)
           .edit()
           .putString("usdt", price.toPlainString())
@@ -26,6 +27,7 @@ public final class PriceWidget extends AppWidgetProvider {
           .putLong("at", at)
           .apply();
       render(c);
+      MiningWidget.render(c);
     }
   }
 

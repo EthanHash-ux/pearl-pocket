@@ -1,0 +1,10 @@
+<resources>
+    <string name="mining_widget_name">PearlFortune · 算力与价格</string>
+    <string name="mining_widget_description">PRL 行情、矿池估算算力和矿工连接</string>
+    <string name="mining_widget_source">PRL / USDT · BigONE</string>
+    <string name="mining_widget_rate">PEARLFORTUNE · 1 小时矿池估算</string>
+    <string name="mining_widget_empty">—</string>
+    <string name="mining_widget_config">选择矿工</string>
+    <string name="fortune_received">PearlFortune · %1$s</string>
+    <string name="fortune_error">暂未取得数据：%1$s\n可以刷新或查看完整页面。</string>
+</resources>

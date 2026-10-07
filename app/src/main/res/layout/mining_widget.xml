@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/mw_body" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="16dp" android:background="@drawable/widget_background">
+    <TextView android:id="@+id/mw_name" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/mining_widget_name" android:textColor="#8FE9C5" android:textSize="13sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="8dp">
+        <TextView android:id="@+id/mw_price" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="@string/widget_empty" android:textColor="#FFFFFF" android:textSize="24sp" android:maxLines="1" android:autoSizeTextType="uniform" android:autoSizeMinTextSize="16sp" android:autoSizeMaxTextSize="24sp" android:autoSizeStepGranularity="1sp" />
+        <TextView android:id="@+id/mw_change" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#8FE9C5" android:textSize="12sp" />
+    </LinearLayout>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/mining_widget_source" android:textColor="#A7BDC6" android:textSize="11sp" />
+    <TextView android:id="@+id/mw_price_time" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#A7BDC6" android:textSize="11sp" />
+    <TextView android:id="@+id/mw_rate_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="@string/mining_widget_rate" android:textColor="#C4D9DF" android:textSize="11sp" />
+    <TextView android:id="@+id/mw_rate" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/mining_widget_empty" android:textColor="#FFFFFF" android:textSize="24sp" android:maxLines="1" android:autoSizeTextType="uniform" android:autoSizeMinTextSize="14sp" android:autoSizeMaxTextSize="24sp" android:autoSizeStepGranularity="1sp" />
+    <TextView android:id="@+id/mw_windows" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#C4D9DF" android:textSize="11sp" android:maxLines="2" />
+    <TextView android:id="@+id/mw_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="#8FE9C5" android:textSize="11sp" android:maxLines="2" />
+    <TextView android:id="@+id/mw_mining_time" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#A7BDC6" android:textSize="11sp" android:maxLines="1" />
+    <TextView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
+        <Button style="?android:attr/buttonBarButtonStyle" android:id="@+id/mw_refresh" android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp" android:text="@string/widget_refresh" android:textSize="12sp" android:textColor="#8FE9C5" android:background="@drawable/widget_button" />
+        <Button style="?android:attr/buttonBarButtonStyle" android:id="@+id/mw_config" android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp" android:text="@string/mining_widget_config" android:textSize="12sp" android:textColor="#C4D9DF" android:background="@drawable/widget_button" />
+    </LinearLayout>
+</LinearLayout>

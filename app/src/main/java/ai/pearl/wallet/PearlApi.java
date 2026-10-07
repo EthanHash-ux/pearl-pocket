@@ -280,7 +280,7 @@ public final class PearlApi {
         URI uri = new URI(url);
         if (!"https".equals(uri.getScheme()) || uri.getUserInfo() != null || uri.getPort() != -1
                 || !("blockbook.pearlresearch.ai".equals(uri.getHost()) || "api.coingecko.com".equals(uri.getHost()) || "api.big.one".equals(uri.getHost()) || "pearl.herominers.com".equals(uri.getHost())
-                    || (raw == null && ("api.pearlbridge.xyz".equals(uri.getHost()) || "mainnet.zklighter.elliot.ai".equals(uri.getHost())))
+                    || (raw == null && ("pearlfortune.org".equals(uri.getHost()) || "api.pearlbridge.xyz".equals(uri.getHost()) || "mainnet.zklighter.elliot.ai".equals(uri.getHost())))
                     || (EvmPublicApi.RPC.equals(url) && raw != null))) {
             throw new IllegalArgumentException("仅允许受支持的 HTTPS 数据服务");
         }
@@ -291,7 +291,7 @@ public final class PearlApi {
             connection.setConnectTimeout(market?6_000:12_000); connection.setReadTimeout(market?8_000:20_000);
             connection.setUseCaches(false); connection.setRequestProperty("Cache-Control","no-cache");
             connection.setRequestProperty("Accept", "application/json");
-            connection.setRequestProperty("User-Agent", "PearlPocketAndroid/0.7");
+            connection.setRequestProperty("User-Agent", "PearlPocketAndroid/0.8");
             if (raw != null) {
                 byte[] data = raw.getBytes(StandardCharsets.US_ASCII);
                 connection.setRequestMethod("POST"); connection.setDoOutput(true);

@@ -4,7 +4,7 @@ Pearl Pocket（掌珠钱包）是基于 Pearl Research Labs 官方协议代码�
 
 ## 安装与使用
 
-当前版本 **0.7.0**。GitHub 安装包位于本仓库 **Releases → v0.7.0 → Assets**，文件名为 `pearl-wallet-android-0.7.0.apk`；本地构建文件保存在 `artifacts/`。最低 Android 8.0，支持 ARM64 手机与 x86_64 模拟器。此包关闭 Android 调试权限，使用独立本地开发证书签名；仍是未经独立安全审计的开发测试版本。
+当前版本 **0.8.0**。GitHub 安装包位于本仓库 **Releases → v0.8.0 → Assets**，文件名为 `pearl-wallet-android-0.8.0.apk`；本地构建文件保存在 `artifacts/`。最低 Android 8.0，支持 ARM64 手机与 x86_64 模拟器。此包关闭 Android 调试权限，使用独立本地开发证书签名；仍是未经独立安全审计的开发测试版本。
 
 1. 在手机设置中启用锁屏 PIN 或密码，然后打开应用。
 2. 选择「创建手机钱包」，验证手机解锁，设置至少 10 个字符的钱包密码。
@@ -47,8 +47,8 @@ Pearl Pocket（掌珠钱包）是基于 Pearl Research Labs 官方协议代码�
 
 | 钱包首页 | 实时行情 |
 | --- | --- |
-| ![钱包首页](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.7.0/ui-wallet.png) | ![实时行情](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.7.0/ui-market.png) |
-| ![深色钱包](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.7.0/ui-wallet-dark.png) | ![深色行情](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.7.0/ui-market-dark.png) |
+| ![钱包首页](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.8.0/ui-wallet.png) | ![实时行情](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.8.0/ui-market.png) |
+| ![深色钱包](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.8.0/ui-wallet-dark.png) | ![深色行情](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.8.0/ui-market-dark.png) |
 
 [设计说明与下一步功能](docs/DESIGN.md)。余额隐藏同步遮盖无障碍朗读内容；发送审核仍显示实际金额。
 
@@ -170,4 +170,16 @@ Ethereum 和 Lighter 交易由外部钱包 / 账户签名，本应用没有自�
 
 [完整流程、公式与协议研究](docs/CROSS_CHAIN.md)。
 
-![原生跨链工作台](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.7.0/ui-cross-chain.png)
+![原生跨链工作台](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.8.0/ui-cross-chain.png)
+
+## PearlFortune 与桌面算力组件
+
+0.8.0 增加 **挖矿 → PearlFortune 我的矿工**：保存矿机使用的公开 PRL 收款地址，查看 1 / 8 / 24 小时估算算力、接受率和 worker 连接、自报算力、GPU 数量与更新时间。矿池估算和矿机自报分别显示，并保留各自的 H/s / MAC/s 单位。未知与不完整数据不会冒充零值。
+
+在详情中点击 **添加算力与价格小组件**，或从系统桌面的小组件列表添加。支持矿池总览、个人矿工和多个独立配置，同时显示 BigONE PRL/USDT 及涨跌。点组件查看矿工详情，点「选择矿工」重新绑定。后台约每 15 分钟尝试更新，执行时间由安卓系统控制；离线和刷新失败保留带标记的缓存。
+
+「查看 PearlFortune 完整页面」会直接打开已填入相同公开地址的 [官网矿工页面](https://pearlfortune.org/#miner)，保留完整网页的结算、账本、收益计算及 NOCK 合并挖矿查看。所有操作仅查询公开数据，不改变钱包签名地址，不执行挖矿或提现。详见 [组件说明与数据边界](docs/MINING_WIDGETS.md)。
+
+| PearlFortune 原生页面 | 安卓桌面组件 |
+|---|---|
+| ![PearlFortune](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.8.0/ui-fortune.png) | ![算力与价格组件](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.8.0/ui-mining-widget.png) |

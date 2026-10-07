@@ -22,6 +22,14 @@
             </intent-filter>
         </activity>
         <activity android:name=".QrScannerActivity" android:exported="false" />
+        <activity android:name=".MiningWidgetConfigActivity" android:exported="true">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" /></intent-filter>
+        </activity>
+        <service android:name=".MiningWidgetJob" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <receiver android:name=".MiningWidget" android:exported="false" android:label="@string/mining_widget_name">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/mining_widget_info" />
+        </receiver>
         <service android:name=".PriceAlertJob" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
         <service android:name=".ReceiptJob" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
         <receiver android:name=".PriceWidget" android:exported="false">
