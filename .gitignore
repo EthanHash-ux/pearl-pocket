@@ -1,0 +1,16 @@
+.gradle/
+**/build/
+local.properties
+*.jks
+*.keystore
+artifacts/
+app/src/main/jniLibs/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+*.pem
+*.p12
+*.pfx
+# Desktop preview is a separate local demo; this repository contains the Android wallet.
+preview/

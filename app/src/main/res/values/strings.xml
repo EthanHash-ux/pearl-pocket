@@ -1,0 +1,9 @@
+<resources>
+    <string name="mnemonic_twelve">12 个词</string>
+    <string name="mnemonic_fifteen">15 个词</string>
+    <string name="mnemonic_eighteen">18 个词</string>
+    <string name="mnemonic_twenty_one">21 个词</string>
+    <string name="mnemonic_twenty_four">24 个词</string>
+    <string name="mnemonic_paste">粘贴整段助记词</string>
+    <string name="mnemonic_paste_count">粘贴内容需要正好包含 12、15、18、21 或 24 个 BIP39 英文助记词</string>
+</resources>
