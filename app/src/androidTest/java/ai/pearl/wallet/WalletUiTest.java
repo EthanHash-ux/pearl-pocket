@@ -37,7 +37,7 @@ public class WalletUiTest {
     private Context context(){return InstrumentationRegistry.getInstrumentation().getTargetContext();}
     private UiDevice device(){return UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());}
     private UiObject2 text(String text){String plain=text.replaceAll("^[^\\p{L}\\p{N}]+","");UiObject2 item=device().wait(Until.findObject(By.text(Pattern.compile(Pattern.quote(text)+"|"+Pattern.quote(plain)))),30_000);assertNotNull("Expected UI control is missing: "+text,item);return item;}
-    private void tap(String text){text(text).click();}
+    private void tap(String text){for(int attempt=0;attempt<3;attempt++){device().waitForIdle();try{text(text).click();return;}catch(androidx.test.uiautomator.StaleObjectException redraw){if(attempt==2)throw redraw;}}}
     private void authenticate(){UiObject2 pin=device().wait(Until.findObject(By.clazz("android.widget.EditText")),15_000);assertNotNull("System credential entry is missing",pin);pin.setText("24682468");device().pressEnter();}
     private void hideKeyboard(){try{if(device().executeShellCommand("dumpsys input_method").contains("mInputShown=true"))device().pressBack();}catch(java.io.IOException e){throw new AssertionError(e);}}
     private void passwords(){text("新钱包密码（至少 10 个字符）").setText(password);text("再次输入密码").setText(password);hideKeyboard();}
