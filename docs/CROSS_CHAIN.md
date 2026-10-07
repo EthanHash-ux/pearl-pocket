@@ -25,6 +25,7 @@
 - 桥控制器：**`0xa6571b73489d4ebfa269a107208665df7c80aef5`**。
 - Uniswap V3 WPRL / USDT：固定池 **`0x89a67c6dee35db9815da2fb9191f0998a8b37c39`**，fee tier **10000（1%）**。USDT 固定 Ethereum 合约 `0xdac17f958d2ee523a2206206994597c13d831ec7`、6 位精度。每次路线报价核对主网、代币精度和 Factory `getPool` 结果。仅支持此已核对单池，没有声称找到全市场最优路由。
 - Uniswap QuoterV2：`0x61ffe014ba17989e743c5f6cb21bf9697530b21e`，使用只读 `eth_call`。卖出使用 exact input，买入指定 WPRL 数量使用 exact output；拒绝无法完整报价及价格边界的部分输入兑换。
+- Lighter 官方 `/tokenlist` 在研究时将 PRL 标记为 **Pearl**、`gecko_id: pearl-2`、PERPS；另有其他项目使用 PRL 代码，不能据代码跨平台合并。
 - Lighter PRL：固定市场 **4097**，响应必须仍为 PRL、perp、active、未冻结、未处于只减仓。展示 USDC 口径、标记价、指数价、买卖盘与最近已结算小时资金费。不会按其他交易所相同的 PRL 符号挑选或合并资产。
 
 PearlBridge 是独立的社区实验性桥，不是 Pearl Research Labs 的官方担保。PRL 保管、签名验证者、运营与可升级合约会引入额外信任；暂停、额度和应急机制可能影响铸造或赎回。API 状态与 RPC 结果没有经过本机独立链验证。WPRL 不能直接按 PRL 转入 Lighter，也没有实现 WPRL 作为其保证金。
@@ -63,7 +64,7 @@ Ethereum RPC POST 限制到 `https://ethereum-rpc.publicnode.com`，允许的只
 - [PearlBridge 公共 API 索引](https://api.pearlbridge.xyz/v1)、[开发文档](https://pearlbridge.xyz/developers)、[桥工作原理](https://pearlbridge.xyz/infrastructure)。
 - [桥维护方钱包 API 实现](https://github.com/PearlBridgeXYZ/pearlwallet/blob/main/src/services/bridge-v1.ts)：8 位金额、真实生命周期及首次充值地址记录的信任边界。
 - [BigONE 发布 WPRL / PRL 的原始公告](https://bigone.zendesk.com/hc/en-us/articles/59478678240409-BigONE-Lists-PearlBridge-Bridged-WPRL-Ethereum-WPRL-PRL-Trading-Pair-is-Now-Available)：桥网站与 token 合约；该 WPRL / PRL 交易对不用于 USDT 直接价差，避免单位错配。
-- [Lighter 盘口 API](https://apidocs.lighter.xyz/reference/orderbookorders)、[市场元数据](https://apidocs.lighter.xyz/reference/orderbookdetails)、[PRL 实时元数据](https://mainnet.zklighter.elliot.ai/api/v1/orderBookDetails?market_id=4097)。
+- [Lighter 盘口 API](https://apidocs.lighter.xyz/reference/orderbookorders)、[市场元数据](https://apidocs.lighter.xyz/reference/orderbookdetails)、[PRL 实时元数据](https://mainnet.zklighter.elliot.ai/api/v1/orderBookDetails?market_id=4097)、[官方资产名称列表](https://mainnet.zklighter.elliot.ai/api/v1/tokenlist)、[Lighter PRL 上线公告](https://t.me/lighter_announcements/443)。
 - [Lighter 资金费](https://docs.lighter.xyz/trading/funding)、[已结算小时数据接口](https://apidocs.lighter.xyz/reference/fundings)、[USDC 盈亏口径](https://docs.lighter.xyz/trading/pnl-and-total-account-value)、[账户收费差异](https://docs.lighter.xyz/trading/trading-fees)。
 - [Uniswap Ethereum 合约部署](https://developers.uniswap.org/docs/protocols/v3/deployments/v3-ethereum-deployments)、[官方 QuoterV2 ABI](https://github.com/Uniswap/v3-periphery/blob/main/contracts/interfaces/IQuoterV2.sol)。池地址来自桥网站当前公开配置，并通过主网 Factory 调用核对。
 

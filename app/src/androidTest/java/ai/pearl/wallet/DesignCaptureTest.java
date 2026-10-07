@@ -149,6 +149,7 @@ public class DesignCaptureTest {
           () -> dialog.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE));
       assertTrue(device.wait(Until.hasObject(By.textContains("转入 100 PRL")), 40000));
       assertTrue(device.wait(Until.hasObject(By.textContains("买一 ")), 40000));
+      assertTrue(device.wait(Until.hasObject(By.textContains("卖 1 WPRL →")), 40000));
       Thread.sleep(500);
       capture(device, output);
     } finally {
