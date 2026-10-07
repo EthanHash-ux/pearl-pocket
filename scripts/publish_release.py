@@ -26,6 +26,8 @@ def publish():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo', required=True, help='GitHub OWNER/REPOSITORY; repository must already exist')
     parser.add_argument('--dry-run', action='store_true', help='Validate local release files without changing GitHub')
+    parser.add_argument('--expected-visibility', choices=('private', 'public', 'internal'),
+                        help='Require this repository visibility before uploading any source or assets')
     args = parser.parse_args()
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*', args.repo):
         raise ValueError('Use an explicit GitHub OWNER/REPOSITORY')
@@ -56,8 +58,15 @@ def publish():
     verification = json.loads((artifacts/'verification.json').read_text())
     if verification['version'] != VERSION or verification['apk_debuggable']:
         raise ValueError('Release verification does not describe a non-debuggable current build')
+    if verification.get('source_git_commit') != commit:
+        raise ValueError('Release verification refers to a different source commit')
     if verification['apk_sha256'] != sums[ASSETS[0]] or verification['source_sha256'] != sums[ASSETS[1]]:
         raise ValueError('Verification and release checksums disagree')
+    with zipfile.ZipFile(artifacts/ASSETS[0]) as apk:
+        vcs = apk.read('META-INF/version-control-info.textproto').decode('utf-8')
+        revisions = re.findall(r'revision:\s*"([0-9a-f]{40})"', vcs)
+        if revisions != [commit]:
+            raise ValueError('APK was built from a different source commit')
     # The attached source archive must contain the exact source stored in Git.
     with zipfile.ZipFile(artifacts/ASSETS[1]) as archive:
         expected = {f'pearl-wallet-android/{name}' for name in run('git', 'ls-files').stdout.splitlines()}
@@ -74,9 +83,12 @@ def publish():
     if args.dry_run:
         return
     run('gh', 'auth', 'status', '--hostname', 'github.com')
-    repo = json.loads(run('gh', 'repo', 'view', args.repo, '--json', 'nameWithOwner,viewerPermission').stdout)
+    repo = json.loads(run('gh', 'repo', 'view', args.repo,
+                          '--json', 'nameWithOwner,viewerPermission,visibility').stdout)
     if repo['nameWithOwner'].lower() != args.repo.lower() or repo['viewerPermission'] not in ('ADMIN', 'MAINTAIN', 'WRITE'):
         raise ValueError('The selected GitHub account cannot write to this repository')
+    if args.expected_visibility and repo['visibility'].lower() != args.expected_visibility:
+        raise ValueError('Repository visibility differs from the required visibility')
     local_tag = run('git', 'rev-parse', '--verify', f'refs/tags/{TAG}^{{commit}}', check=False)
     if local_tag.returncode == 0 and local_tag.stdout.strip() != commit:
         raise ValueError('The existing local tag refers to a different commit')

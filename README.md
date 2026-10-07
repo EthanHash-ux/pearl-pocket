@@ -4,7 +4,7 @@ Pearl Pocket（掌珠钱包）是基于 Pearl Research Labs 官方协议代码�
 
 ## 安装与使用
 
-当前版本 **0.8.0**。GitHub 安装包位于本仓库 **Releases → v0.8.0 → Assets**，文件名为 `pearl-wallet-android-0.8.0.apk`；本地构建文件保存在 `artifacts/`。最低 Android 8.0，支持 ARM64 手机与 x86_64 模拟器。此包关闭 Android 调试权限，使用独立本地开发证书签名；仍是未经独立安全审计的开发测试版本。
+当前版本 **0.8.0**。仓库为私有，需使用获授权的 GitHub 账号登录，在 **Releases → v0.8.0 → Assets** 下载 `pearl-wallet-android-0.8.0.apk`；本地构建文件保存在 `artifacts/`。最低 Android 8.0，支持 ARM64 手机与 x86_64 模拟器。此包关闭 Android 调试权限，使用独立本地开发证书签名；仍是未经独立安全审计的开发测试版本。
 
 1. 在手机设置中启用锁屏 PIN 或密码，然后打开应用。
 2. 选择「创建手机钱包」，验证手机解锁，设置至少 10 个字符的钱包密码。
@@ -135,17 +135,17 @@ python3 scripts/package_apk.py --sdk /path/to/android-sdk
 
 ## GitHub 发布
 
-发布说明见 [0.7.0 Release notes](docs/releases/v0.7.0.md)。仓库保存本应用完整 Java/Go/JNI 源码、测试、构建脚本和依赖版本；生成的 APK、原生库、SDK、缓存、本机路径和 APK 签名密钥不提交到 Git。
+发布说明见 [0.8.0 Release notes](docs/releases/v0.8.0.md)。仓库保存本应用完整 Java/Go/JNI 源码、测试、构建脚本和依赖版本；生成的 APK、原生库、SDK、缓存、本机路径和 APK 签名密钥不提交到 Git。
 
 将已经验证的安装包、当前源码包、校验文件和测试报告保存在 `artifacts/` 后，可使用 GitHub CLI 登录并运行：
 
 ```sh
 gh auth login --hostname github.com --git-protocol https --web
 python3 scripts/publish_release.py --repo YOUR_ACCOUNT/pearl-pocket --dry-run
-python3 scripts/publish_release.py --repo YOUR_ACCOUNT/pearl-pocket
+python3 scripts/publish_release.py --repo YOUR_ACCOUNT/pearl-pocket --expected-visibility private
 ```
 
-脚本只向指定仓库推送当前 `main` 和 `v0.7.0` 标签，并创建开发测试版 Release；远端标签或同名附件不一致时停止，避免覆盖已经发布的版本。仓库需要先存在，且当前 GitHub 账号拥有写入权限。脚本不会重新生成签名证书。
+脚本只向指定仓库推送当前 `main` 和 `v0.8.0` 标签，并创建开发测试版 Release；远端标签或同名附件不一致时停止，避免覆盖已经发布的版本。发布前会核对 APK、源码和验证报告的提交一致；指定 `--expected-visibility private` 时还会检查目标仓库确为私有。仓库需要先存在，且当前 GitHub 账号拥有写入权限。脚本不会重新生成签名证书。
 
 ## 0.6.0 新功能与使用范围
 
