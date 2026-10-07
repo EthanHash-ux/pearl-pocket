@@ -80,7 +80,7 @@ def publish():
     if local_tag.returncode == 0 and local_tag.stdout.strip() != commit:
         raise ValueError('The existing local tag refers to a different commit')
     if local_tag.returncode != 0:
-        run('git', 'tag', '-a', TAG, '-m', f'Pearl Android Wallet {VERSION}')
+        run('git', 'tag', '-a', TAG, '-m', f'Pearl Pocket {VERSION}')
     url = f'https://github.com/{args.repo}.git'
     remote = run('git', 'remote', 'get-url', 'origin', check=False)
     if remote.returncode != 0:
@@ -99,7 +99,7 @@ def publish():
     run('gh', 'auth', 'setup-git', '--hostname', 'github.com')
     run('git', 'push', '--atomic', 'origin', 'main', f'refs/tags/{TAG}')
     created = run('gh', 'release', 'create', TAG, '--repo', args.repo, '--verify-tag',
-                  '--prerelease', '--title', f'Pearl Android Wallet {VERSION}',
+                  '--prerelease', '--title', f'Pearl Pocket {VERSION}',
                   '--notes-file', str(PROJECT/f'docs/releases/{TAG}.md'),
                   *[str(artifacts/name) for name in ASSETS])
     print(created.stdout.strip())

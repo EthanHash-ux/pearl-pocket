@@ -1,6 +1,6 @@
-# Pearl 安卓手机独立钱包
+# Pearl Pocket · 掌珠钱包
 
-基于 Pearl Research Labs 官方协议代码的原生 Android 钱包。Java 界面与 Android Keystore 负责交互和密钥保护；Go/JNI 使用固定版本的官方 Pearl 库派生地址、构建交易、签名，并逐个运行官方脚本引擎校验。它是独立开发项目，不是 Pearl Research Labs 官方发行的钱包。
+Pearl Pocket（掌珠钱包）是基于 Pearl Research Labs 官方协议代码的原生 Android 手机独立钱包。Java 界面与 Android Keystore 负责交互和密钥保护；Go/JNI 使用固定版本的官方 Pearl 库派生地址、构建交易、签名，并逐个运行官方脚本引擎校验。它是独立开发项目，不是 Pearl Research Labs 官方发行的钱包。
 
 ## 安装与使用
 
@@ -114,8 +114,8 @@ python3 scripts/package_apk.py --sdk /path/to/android-sdk
 
 ```sh
 gh auth login --hostname github.com --git-protocol https --web
-python3 scripts/publish_release.py --repo YOUR_ACCOUNT/pearl-wallet-android --dry-run
-python3 scripts/publish_release.py --repo YOUR_ACCOUNT/pearl-wallet-android
+python3 scripts/publish_release.py --repo YOUR_ACCOUNT/pearl-pocket --dry-run
+python3 scripts/publish_release.py --repo YOUR_ACCOUNT/pearl-pocket
 ```
 
 脚本只向指定仓库推送当前 `main` 和 `v0.3.1` 标签，并创建开发测试版 Release；远端标签或同名附件不一致时停止，避免覆盖已经发布的版本。仓库需要先存在，且当前 GitHub 账号拥有写入权限。脚本不会重新生成签名证书。
