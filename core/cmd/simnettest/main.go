@@ -10,6 +10,7 @@ import (
 	"github.com/pearl-research-labs/pearl/node/btcutil"
 	"github.com/pearl-research-labs/pearl/node/chaincfg"
 	"github.com/pearl-research-labs/pearl/node/wire"
+	"math/big"
 	"net/http"
 	"os"
 	"os/exec"
@@ -130,7 +131,33 @@ func main() {
 	if output.Confirmations != 1 || string(output.Value) != "0.001" {
 		panic(fmt.Sprintf("recipient output not confirmed: %+v", output))
 	}
-	result := map[string]any{"result": "PASS", "network": "isolated official Pearl simnet", "upstream_commit": "2f8b770cac8f8b74be05c1fc51c2baeb76ce0701", "txid": signed.TxID, "amount_grains": p.Amount, "fee_grains": signed.Fee, "confirmations": output.Confirmations, "checked": []string{"101 coinbase maturity blocks", "local official signing", "node sendrawtransaction acceptance", "block confirmation", "recipient unspent output amount"}, "mainnet_funds_used": false}
+	sweepPayment := walletcore.Payment{From: a.Address, To: b.Address, Rate: 10031, UTXOs: []walletcore.UTXO{{TxID: signed.TxID, Vout: 1, Raw: signed.Raw, Confirmations: 1}}}
+	maximum, e := walletcore.PlanMaximum(sweepPayment)
+	if e != nil {
+		panic(e)
+	}
+	swept, e := walletcore.Sign(entropy, maximum)
+	if e != nil {
+		panic(e)
+	}
+	_ = json.Unmarshal(rpc("sendrawtransaction", swept.Raw), &accepted)
+	if accepted != swept.TxID {
+		panic("maximum broadcast ID mismatch")
+	}
+	_ = json.Unmarshal(rpc("generate", 1), &confirmed)
+	_ = json.Unmarshal(rpc("gettxout", swept.TxID, 0, true), &output)
+	expected := new(big.Rat).SetFrac(big.NewInt(maximum.Payment.Amount), big.NewInt(100000000))
+	actual, ok := new(big.Rat).SetString(string(output.Value))
+	if !ok || output.Confirmations != 1 || actual.Cmp(expected) != 0 {
+		panic("maximum recipient output not confirmed")
+	}
+	decodedSweep := wire.NewMsgTx(2)
+	sweepBytes, _ := hex.DecodeString(swept.Raw)
+	_ = decodedSweep.Deserialize(bytes.NewReader(sweepBytes))
+	if len(decodedSweep.TxOut) != 1 || maximum.Change != 0 {
+		panic("maximum generated change")
+	}
+	result := map[string]any{"result": "PASS", "network": "isolated official Pearl simnet", "upstream_commit": "2f8b770cac8f8b74be05c1fc51c2baeb76ce0701", "txid": signed.TxID, "amount_grains": p.Amount, "fee_grains": signed.Fee, "confirmations": output.Confirmations, "checked": []string{"101 coinbase maturity blocks", "local official signing", "node sendrawtransaction acceptance", "block confirmation", "recipient unspent output amount"}, "mainnet_funds_used": false, "maximum_transfer": map[string]any{"result": "PASS", "txid": swept.TxID, "amount_grains": maximum.Payment.Amount, "fee_grains": swept.Fee, "confirmations": output.Confirmations, "outputs": len(decodedSweep.TxOut), "change_grains": maximum.Change}}
 	encoded, _ = json.MarshalIndent(result, "", "  ")
 	fmt.Println(string(encoded))
 }

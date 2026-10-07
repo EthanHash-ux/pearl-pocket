@@ -46,6 +46,7 @@ public class WalletUiTest {
         device().pressHome();Thread.sleep(400);
         File wallet=new File(context().getNoBackupFilesDir(),"wallet-v1.json");
         if(wallet.exists()) {JSONObject meta=new JSONObject(new String(Files.readAllBytes(wallet.toPath()),java.nio.charset.StandardCharsets.UTF_8));KeyStore keys=KeyStore.getInstance("AndroidKeyStore");keys.load(null);keys.deleteEntry("pearl-wallet-"+meta.getString("id"));assertTrue(wallet.delete());}
+        context().getSharedPreferences("public_preferences",Context.MODE_PRIVATE).edit().remove("observed_address").remove("dark_mode").remove("receipt_notifications").commit();
         context().getSharedPreferences("backup_status",Context.MODE_PRIVATE).edit().clear().commit();
         Intent intent=new Intent(context(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK);context().startActivity(intent);
         text("恢复已有手机钱包");
@@ -71,7 +72,7 @@ public class WalletUiTest {
         for(UiObject2 field:fields){Matcher m=Pattern.compile("第 (\\d+) 个词").matcher(field.getText());assertTrue(m.find());field.setText(words.get(Integer.parseInt(m.group(1))-1));}
         hideKeyboard();tap("完成");text("备份完成");tap("知道了");String original=receive();
         fresh();recover(String.join(" ",words),original,false);words.clear();
-        tap("⚙\n设置");tap("查看离线备份");authenticate();text("钱包密码").setText("Wrong-password-42");hideKeyboard();tap("确认");text("操作失败");assertTrue(device().hasObject(By.textContains("密码错误")));tap("知道了");
+        tap("⚙\n设置");scrollTo("查看离线备份");tap("查看离线备份");authenticate();text("钱包密码").setText("Wrong-password-42");hideKeyboard();tap("确认");text("操作失败");assertTrue(device().hasObject(By.textContains("密码错误")));tap("知道了");
         fresh();tap("恢复已有手机钱包");text("恢复手机钱包");tap("12 个词");UiObject2 first=device().findObject(By.desc("第 1 个助记词"));assertNotNull(first);first.setText("abandon ".repeat(12).trim());hideKeyboard();assertFalse(text("校验并继续").isEnabled());
         assertTrue(device().hasObject(By.textContains("校验")));first=device().findObject(By.desc("第 1 个助记词"));first.setText("abndon");hideKeyboard();assertFalse(text("校验并继续").isEnabled());
         device().pressHome();context().startActivity(new Intent(context(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));text("恢复已有手机钱包");assertFalse(device().hasObject(By.text("恢复手机钱包")));
@@ -120,7 +121,7 @@ public class WalletUiTest {
         UiObject2 allow=device().wait(Until.findObject(By.res("com.android.permissioncontroller:id/permission_allow_button")),2000);if(allow!=null)allow.click();text("价格提醒");assertTrue(device().hasObject(By.textContains("达到 / 高于 999999 USDT")));PriceAlerts savedAlerts=new PriceAlerts(PublicStore.of(context()));assertTrue(savedAlerts.active());
         long now=System.currentTimeMillis()/1000;assertEquals(1,savedAlerts.claim(new java.math.BigDecimal("1000000"),now,now,true).size());tap("关闭");tap("价格提醒");scrollTo("重新启用 999999");tap("重新启用 999999");text("重新启用价格提醒？");tap("重新启用");assertTrue(device().wait(Until.hasObject(By.textContains("等待触发")),5000));assertTrue(savedAlerts.active());
         tap("删除提醒 999999");text("暂无价格提醒");tap("关闭");
-        tap("◇\n挖矿");tap("挖矿收益计算");String[] hints={"预计费前 PRL / 天","PRL 价格（CNY）","设备功耗（W）","电价（CNY / kWh）","矿池费率（%）","租金（CNY / 天）"};String[] inputs={"10","5","1000","0.5","2","3"};
+        tap("◇\n挖矿");scrollTo("挖矿收益计算");tap("挖矿收益计算");String[] hints={"预计费前 PRL / 天","PRL 价格（CNY）","设备功耗（W）","电价（CNY / kWh）","矿池费率（%）","租金（CNY / 天）"};String[] inputs={"10","5","1000","0.5","2","3"};
         for(int i=0;i<hints.length;i++){scrollToDescription(hints[i]);UiObject2 field=device().findObject(By.desc(hints[i]));assertNotNull(field);field.setText(inputs[i]);hideKeyboard();}
         scrollTo("计算收益");tap("计算收益");assertTrue(device().wait(Until.hasObject(By.textContains("每天净收益：¥34.00")),5000));tap("关闭");
     }

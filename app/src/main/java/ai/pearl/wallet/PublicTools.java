@@ -21,8 +21,9 @@ final class PublicTools {
     private final Activity activity;
     private final AddressBook contacts;
     private final PriceAlerts alerts;
-    private AlertDialog dialog;
-    PublicTools(Activity activity){this.activity=activity;PublicStore.Storage store=PublicStore.of(activity);contacts=new AddressBook(store);alerts=new PriceAlerts(store);}
+    private AlertDialog dialog;private final java.util.function.Supplier<PearlApi.Price> quote;
+    PublicTools(Activity activity){this(activity,()->null);}
+    PublicTools(Activity activity,java.util.function.Supplier<PearlApi.Price> quote){this.activity=activity;this.quote=quote;PublicStore.Storage store=PublicStore.of(activity);contacts=new AddressBook(store);alerts=new PriceAlerts(store);}
     private LinearLayout form(){return PearlDesign.form(activity);}
     private TextView text(String value){return PearlDesign.note(activity,value);}
     private EditText field(String hint,String value,boolean numeric){EditText e=new EditText(activity);e.setHint(hint);e.setContentDescription(hint);e.setText(value);e.setInputType(numeric?InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL:InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);e.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);PearlDesign.input(e);return e;}
@@ -61,19 +62,21 @@ final class PublicTools {
             view.addView(text(AlertNotifications.available(activity)?"系统通知已启用":"通知未启用：提醒保留，暂不触发。可在系统设置中启用通知。"));
             if(alerts.active())view.addView(text(AlertNotifications.backgroundScheduled(activity)?"后台检查已安排":"后台检查暂未安排；应用前台仍会随新行情检查。请启用通知并重新打开应用。"));
             List<PriceAlerts.Alert> list=alerts.list();if(list.isEmpty())view.addView(text("暂无价格提醒"));
-            for(PriceAlerts.Alert a:list){view.addView(text(a.description()+"\n"+(a.enabled?"等待触发":"已触发 · "+new java.text.SimpleDateFormat("MM/dd HH:mm",java.util.Locale.CHINA).format(new java.util.Date(a.firedAt*1000)))));if(!a.enabled)view.addView(button("重新启用 "+a.target.toPlainString(),()->{
+            for(PriceAlerts.Alert a:list){view.addView(button("编辑提醒 "+a.target.toPlainString(),()->editAlert(a)));view.addView(text(a.description()+"\n"+(a.enabled?"等待触发":"已触发 · "+new java.text.SimpleDateFormat("MM/dd HH:mm",java.util.Locale.CHINA).format(new java.util.Date(a.firedAt*1000)))));if(!a.enabled)view.addView(button("重新启用 "+a.target.toPlainString(),()->{
                 AlertDialog confirm=new AlertDialog.Builder(activity).setTitle("重新启用价格提醒？").setMessage(a.description()+"\n下一次新报价达到目标时会再次提醒。若当前已达到目标，可能立即触发。").setNegativeButton("取消",null).setPositiveButton("重新启用",(d,w)->{try{alerts.rearm(a.id);AlertNotifications.schedule(activity);priceAlerts();}catch(Exception e){failure(e);}}).create();confirm.show();PearlDesign.dialog(confirm);
             }));view.addView(button("删除提醒 "+a.target.toPlainString(),()->{try{alerts.remove(a.id);AlertNotifications.schedule(activity);priceAlerts();}catch(Exception e){failure(e);}}));}
             view.addView(button("添加价格提醒",this::addAlert));show("价格提醒",view);
         }catch(Exception e){failure(e);}
     }
-    private void addAlert(){
-        LinearLayout view=form();EditText target=field("目标价格（USDT）","",true);view.addView(target);
+    private void addAlert(){editAlert(null);}
+    private void editAlert(PriceAlerts.Alert existing){
+        LinearLayout view=form();android.widget.RadioGroup kind=new android.widget.RadioGroup(activity);android.widget.RadioButton absolute=new android.widget.RadioButton(activity),percent=new android.widget.RadioButton(activity);absolute.setId(android.view.View.generateViewId());percent.setId(android.view.View.generateViewId());absolute.setText("按目标价格提醒");percent.setText("相对当前报价涨跌（%）");kind.addView(absolute);kind.addView(percent);if(existing!=null&&existing.kind.equals("percent"))percent.setChecked(true);else absolute.setChecked(true);view.addView(kind);
+        EditText target=field("目标价格（USDT）",existing==null?"":existing.target.toPlainString(),true);view.addView(target);kind.setOnCheckedChangeListener((g,id)->{target.setHint(percent.isChecked()?"涨跌幅（%）":"目标价格（USDT）");});
         android.widget.RadioGroup direction=new android.widget.RadioGroup(activity);android.widget.RadioButton above=new android.widget.RadioButton(activity),below=new android.widget.RadioButton(activity);
-        above.setId(android.view.View.generateViewId());below.setId(android.view.View.generateViewId());above.setText("达到 / 高于目标价格");below.setText("达到 / 低于目标价格");direction.addView(above);direction.addView(below);above.setChecked(true);view.addView(direction);
-        view.addView(text("保存后从下一次新报价开始检查。如果已达到目标，会立即触发一次。"));
-        AlertDialog d=new AlertDialog.Builder(activity).setTitle("新建价格提醒").setView(view).setNegativeButton("取消",null).setPositiveButton("保存提醒",null).create();show(d);
-        d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{alerts.add(target.getText().toString(),above.isChecked());d.dismiss();
+        above.setId(android.view.View.generateViewId());below.setId(android.view.View.generateViewId());above.setText("达到 / 高于目标价格");below.setText("达到 / 低于目标价格");direction.addView(above);direction.addView(below);if(existing!=null&&!existing.above)below.setChecked(true);else above.setChecked(true);view.addView(direction);
+        view.addView(text("保存后从下一次新报价开始检查。涨跌幅提醒以保存时的新报价为基准；编辑会重置触发状态。"));
+        AlertDialog d=new AlertDialog.Builder(activity).setTitle(existing==null?"新建价格提醒":"编辑价格提醒").setView(view).setNegativeButton("取消",null).setPositiveButton("保存提醒",null).create();show(d);
+        d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{PearlApi.Price current=quote.get();if(percent.isChecked()&&(current==null||!current.isFresh(System.currentTimeMillis()/1000)))throw new IllegalArgumentException("请先获取新报价，再设置涨跌幅提醒");alerts.save(existing==null?null:existing.id,target.getText().toString(),above.isChecked(),percent.isChecked()?"percent":"target",percent.isChecked()?current.usdt:null);d.dismiss();
             if(Build.VERSION.SDK_INT>=33 && activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)activity.requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATIONS);
             else {AlertNotifications.schedule(activity);priceAlerts();}
         }catch(Exception e){target.setError(e.getMessage());}});

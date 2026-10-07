@@ -24,6 +24,7 @@ final class MiningApi {
     }
     private static long count(JSONObject json,String key)throws Exception{long value=json.getLong(key);if(value<0||value>1000000000000L)throw new IllegalArgumentException("矿池统计值无效");return value;}
     private static BigDecimal number(JSONObject json,String key,boolean positive)throws Exception{BigDecimal n=new BigDecimal(json.get(key).toString());if(n.signum()<0||(positive&&n.signum()==0)||n.precision()>80||n.compareTo(new BigDecimal("1e40"))>0)throw new IllegalArgumentException("矿池统计值无效");return n;}
-    Stats stats()throws Exception{return parse(PearlApi.httpsGet(URL),System.currentTimeMillis()/1000);}
+    static String getPool(String url)throws Exception{try{return PearlApi.httpsGet(url);}catch(java.io.IOException first){Thread.sleep(250);return PearlApi.httpsGet(url);}}
+    Stats stats()throws Exception{return parse(getPool(URL),System.currentTimeMillis()/1000);}
     static String rate(BigDecimal n){String[] unit={"H/s","kH/s","MH/s","GH/s","TH/s","PH/s","EH/s"};int i=0;while(n.compareTo(new BigDecimal("1000"))>=0&&i<unit.length-1){n=n.movePointLeft(3);i++;}return n.setScale(2,java.math.RoundingMode.HALF_UP).toPlainString()+" "+unit[i];}
 }

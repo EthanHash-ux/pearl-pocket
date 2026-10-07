@@ -98,9 +98,28 @@ public final class PearlApi {
         public final BigInteger netGrains;
         public final long time;
         public final int confirmations;
+        public final String counterparties;
         Transaction(String id, BigInteger netGrains, long time, int confirmations) {
-            this.id = id; this.netGrains = netGrains; this.time = time; this.confirmations = confirmations;
+            this(id,netGrains,time,confirmations,"");
         }
+        Transaction(String id, BigInteger netGrains, long time, int confirmations,String counterparties) {
+            this.id = id; this.netGrains = netGrains; this.time = time; this.confirmations = confirmations;
+            this.counterparties=counterparties;
+        }
+    }
+
+    static final class HistoryPage {
+        final Account account;final int page,pages;
+        HistoryPage(Account a,int p,int n){account=a;page=p;pages=n;}
+    }
+    HistoryPage history(String input,int page,int size)throws Exception{
+        String address=PearlAddress.normalize(input);
+        if(page<1||page>100000||size<1||size>100)throw new IllegalArgumentException("历史分页参数无效");
+        if(!status().synced)throw new IllegalArgumentException("链上服务正在同步");
+        JSONObject json=new JSONObject(transport.get(BLOCKBOOK+"address/"+address+"?details=txs&page="+page+"&pageSize="+size));
+        Account account=parseAccount(json,address);int actual=json.optInt("page",page),pages=json.optInt("totalPages",(int)Math.max(1,(account.transactionCount+size-1)/size));
+        if(actual!=page||pages<1||pages>100000||account.transactions.size()>size)throw new IllegalArgumentException("历史分页响应不一致");
+        return new HistoryPage(account,actual,pages);
     }
 
     public static final class Account {
@@ -142,8 +161,8 @@ public final class PearlApi {
         return MarketQuote.Fx.parse(new JSONObject(transport.get(COINGECKO+"simple/price?ids=tether&vs_currencies=usd,cny&include_last_updated_at=true")),System.currentTimeMillis()/1000);
     }
     List<double[]> marketChart(int days) throws Exception {
-        if (days!=1 && days!=7) throw new IllegalArgumentException("行情参数无效");
-        JSONObject json=new JSONObject(transport.get(BIGONE+"asset_pairs/PRL-USDT/candles?period="+(days==1?"MIN5":"HOUR1")+"&limit="+(days==1?288:168)));
+        if (days!=1 && days!=7 && days!=30) throw new IllegalArgumentException("行情参数无效");
+        JSONObject json=new JSONObject(transport.get(BIGONE+"asset_pairs/PRL-USDT/candles?period="+(days==1?"MIN5":days==7?"HOUR1":"DAY1")+"&limit="+(days==1?288:days==7?168:30)));
         if(json.getInt("code")!=0)throw new IOException("交易所历史行情暂不可用");
         JSONArray rows=json.getJSONArray("data"); List<double[]> points=new ArrayList<>();
         for(int i=0;i<rows.length();i++) {
@@ -166,7 +185,7 @@ public final class PearlApi {
     }
 
     public List<double[]> chart(int days, String currency) throws Exception {
-        if (!(days == 1 || days == 7) || !(currency.equals("usd") || currency.equals("cny"))) {
+        if (!(days == 1 || days == 7 || days == 30) || !(currency.equals("usd") || currency.equals("cny"))) {
             throw new IllegalArgumentException("行情参数无效");
         }
         JSONObject json = new JSONObject(transport.get(COINGECKO + "coins/" + COIN_ID
@@ -207,7 +226,10 @@ public final class PearlApi {
             if (!id.matches("[0-9a-f]{64}")) throw new IllegalArgumentException("交易 ID 无效");
             BigInteger net = sumOwned(tx.getJSONArray("vout"), address)
                     .subtract(sumOwned(tx.getJSONArray("vin"), address));
-            transactions.add(new Transaction(id, net, tx.optLong("blockTime", 0), tx.getInt("confirmations")));
+            int confirmations=tx.getInt("confirmations");long at=tx.optLong("blockTime",0);if(confirmations<0||at<0)throw new IllegalArgumentException("交易状态无效");
+            java.util.LinkedHashSet<String> others=new java.util.LinkedHashSet<>();
+            for(String side:new String[]{"vin","vout"}){JSONArray rows=tx.getJSONArray(side);for(int n=0;n<rows.length();n++){JSONArray a=rows.getJSONObject(n).optJSONArray("addresses");if(a!=null)for(int k=0;k<a.length();k++){String value=a.getString(k);if(!value.equals(address)&&value.length()<=120)others.add(value);}}}
+            transactions.add(new Transaction(id, net, at, confirmations,String.join(" ",others)));
         }
         long count = json.getLong("txs");
         if (count < 0) throw new IllegalArgumentException("交易数量无效");
@@ -262,7 +284,7 @@ public final class PearlApi {
             connection.setConnectTimeout(market?6_000:12_000); connection.setReadTimeout(market?8_000:20_000);
             connection.setUseCaches(false); connection.setRequestProperty("Cache-Control","no-cache");
             connection.setRequestProperty("Accept", "application/json");
-            connection.setRequestProperty("User-Agent", "PearlPocketAndroid/0.4");
+            connection.setRequestProperty("User-Agent", "PearlPocketAndroid/0.6");
             if (raw != null) {
                 byte[] data = raw.getBytes(StandardCharsets.US_ASCII);
                 connection.setRequestMethod("POST"); connection.setDoOutput(true);

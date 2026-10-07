@@ -244,6 +244,11 @@ final class WalletFlow {
         EditText to = field("完整 Pearl 主网收款地址", false), amount = field("金额（PRL）", false);
         to.setText(draftAddress);amount.setText(draftAmount);
         amount.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL); view.addView(to); view.addView(amount);
+        android.widget.Button maximum=PearlDesign.button(activity,"发送全部余额",PearlDesign.TEAL,PearlDesign.PALE,v->{
+            if(busy)return;try{String recipient=PearlAddress.normalize(to.getText().toString());if(recipient.equals(host.address()))throw new IllegalArgumentException("收款地址不能是自己");if(dialog!=null)dialog.dismiss();busy=true;int token=generation;String from=host.address();Toast.makeText(activity,"正在核验可用余额与全部发送手续费…",Toast.LENGTH_LONG).show();
+                worker.execute(()->{try{JSONObject payment=api.payment(from,recipient,java.math.BigInteger.valueOf(333));JSONObject quote=NativeCore.call(new JSONObject().put("action","planmax").put("payment",payment));ui(token,()->review(quote));}catch(Exception e){ui(token,()->notice("无法发送全部余额",error(e)));}finally{busy=false;}});
+            }catch(Exception e){to.setError(error(e));}
+        });view.addView(maximum);
         android.widget.Button scan=PearlDesign.button(activity,"扫描收款二维码",PearlDesign.TEAL,PearlDesign.PALE,null);scan.setCompoundDrawables(PearlDesign.icon(activity,"scan",PearlDesign.TEAL,19),null,null,null);view.addView(scan);
         scan.setOnClickListener(v->{scanAddress=to.getText().toString();scanAmount=amount.getText().toString();dismissForScan();activity.startActivityForResult(new Intent(activity,QrScannerActivity.class),QrScannerActivity.REQUEST);});
         android.widget.Button book=PearlDesign.button(activity,"从地址簿选择",PearlDesign.INK,PearlDesign.BG,null);view.addView(book);book.setOnClickListener(v->publicTools.addressBook(to::setText));
@@ -281,7 +286,7 @@ final class WalletFlow {
     private void review(JSONObject quote) {
         try {
             JSONObject payment = quote.getJSONObject("payment");
-            String message = "收款地址\n" + payment.getString("to") + "\n\n金额  " + PearlAmount.format(new BigInteger(payment.getString("amount"))) + " PRL\n手续费  " + PearlAmount.format(new BigInteger(quote.getString("fee"))) + " PRL\n合计  " + PearlAmount.format(new BigInteger(payment.getString("amount")).add(new BigInteger(quote.getString("fee")))) + " PRL\n\n预览有效期 5 分钟。确认后在手机签名并提交到 Pearl 主网。";
+            String message = "收款地址\n" + payment.getString("to") + "\n\n金额  " + PearlAmount.format(new BigInteger(payment.getString("amount"))) + " PRL\n手续费  " + PearlAmount.format(new BigInteger(quote.getString("fee"))) + " PRL\n合计  " + PearlAmount.format(new BigInteger(payment.getString("amount")).add(new BigInteger(quote.getString("fee")))) + " PRL"+(payment.optBoolean("sweep",false)?"\n发送全部可用余额（已扣手续费），不生成找零。未确认与未成熟奖励不参与。":"")+"\n\n预览有效期 5 分钟。确认后在手机签名并提交到 Pearl 主网。";
             show(new AlertDialog.Builder(activity).setTitle("确认转账").setMessage(message).setNegativeButton("取消", null)
                     .setPositiveButton("验证并发送", (d,w) -> unlock("确认并发送这笔转账", entropy -> {
                         if (pending.load() != null) throw new IllegalArgumentException("已有交易等待确认");

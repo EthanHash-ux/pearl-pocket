@@ -42,6 +42,7 @@ type Payment struct {
 	Amount int64  `json:"amount,string"`
 	Rate   int64  `json:"rate"`
 	UTXOs  []UTXO `json:"utxos"`
+	Sweep  bool   `json:"sweep,omitempty"`
 }
 type Quote struct {
 	Payment Payment `json:"payment"`
@@ -164,49 +165,49 @@ func digest(tx *wire.MsgTx) string {
 	h := sha256.Sum256(serialize(tx))
 	return hex.EncodeToString(h[:])
 }
-func build(p Payment) (*wire.MsgTx, []selected, int64, int64, error) {
+func candidatesFor(p Payment) ([]byte, []byte, []selected, error) {
 	if p.Amount < Dust || p.Amount > MaxMoney {
-		return nil, nil, 0, 0, errors.New("金额必须至少为 0.00000333 PRL，且不能超过总供应量")
+		return nil, nil, nil, errors.New("金额必须至少为 0.00000333 PRL，且不能超过总供应量")
 	}
 	if p.Rate < 1000 || p.Rate > 1000000 {
-		return nil, nil, 0, 0, errors.New("手续费率超出允许范围")
+		return nil, nil, nil, errors.New("手续费率超出允许范围")
 	}
 	if len(p.UTXOs) == 0 || len(p.UTXOs) > 200 {
-		return nil, nil, 0, 0, errors.New("没有可用的已确认余额，或输入过多")
+		return nil, nil, nil, errors.New("没有可用的已确认余额，或输入过多")
 	}
 	own, e := addressScript(p.From)
 	if e != nil {
-		return nil, nil, 0, 0, e
+		return nil, nil, nil, e
 	}
 	to, e := addressScript(p.To)
 	if e != nil {
-		return nil, nil, 0, 0, e
+		return nil, nil, nil, e
 	}
 	if bytes.Equal(own, to) {
-		return nil, nil, 0, 0, errors.New("收款地址与自己的地址相同")
+		return nil, nil, nil, errors.New("收款地址与自己的地址相同")
 	}
 	candidates := make([]selected, 0, len(p.UTXOs))
 	seen := make(map[wire.OutPoint]bool)
 	for _, u := range p.UTXOs {
 		hash, e := chainhash.NewHashFromStr(u.TxID)
 		if e != nil || len(u.TxID) != 64 {
-			return nil, nil, 0, 0, errors.New("输入交易 ID 无效")
+			return nil, nil, nil, errors.New("输入交易 ID 无效")
 		}
 		op := wire.OutPoint{Hash: *hash, Index: u.Vout}
 		if seen[op] {
-			return nil, nil, 0, 0, errors.New("出现重复的交易输入")
+			return nil, nil, nil, errors.New("出现重复的交易输入")
 		}
 		seen[op] = true
 		prev, e := deserialize(u.Raw)
 		if e != nil {
-			return nil, nil, 0, 0, e
+			return nil, nil, nil, e
 		}
 		if prev.TxHash() != *hash || int(u.Vout) >= len(prev.TxOut) {
-			return nil, nil, 0, 0, errors.New("输入交易与原始数据不匹配")
+			return nil, nil, nil, errors.New("输入交易与原始数据不匹配")
 		}
 		out := prev.TxOut[u.Vout]
 		if !bytes.Equal(out.PkScript, own) || out.Value <= 0 || out.Value > MaxMoney {
-			return nil, nil, 0, 0, errors.New("交易输入不属于此钱包或金额无效")
+			return nil, nil, nil, errors.New("交易输入不属于此钱包或金额无效")
 		}
 		coinbase := len(prev.TxIn) == 1 && prev.TxIn[0].PreviousOutPoint.Hash == (chainhash.Hash{}) && prev.TxIn[0].PreviousOutPoint.Index == 0xffffffff
 		if u.Confirmations < 1 || (coinbase && u.Confirmations < int64(chaincfg.MainNetParams.CoinbaseMaturity)) {
@@ -220,6 +221,28 @@ func build(p Payment) (*wire.MsgTx, []selected, int64, int64, error) {
 		}
 		return candidates[i].Outpoint.String() < candidates[j].Outpoint.String()
 	})
+	return own, to, candidates, nil
+}
+func build(p Payment) (*wire.MsgTx, []selected, int64, int64, error) {
+	own, to, candidates, e := candidatesFor(p)
+	if e != nil {
+		return nil, nil, 0, 0, e
+	}
+	if p.Sweep {
+		if len(candidates) == 0 || len(candidates) > 100 {
+			return nil, nil, 0, 0, errors.New("发送全部需要 1–100 个可用输入，请先合并过多输入")
+		}
+		tx, total, e := sweepTemplate(candidates, to, p.Rate)
+		if e != nil {
+			return nil, nil, 0, 0, e
+		}
+		fee := (int64(vsize(tx))*p.Rate + 999) / 1000
+		if total-p.Amount != fee {
+			return nil, nil, 0, 0, errors.New("全部余额与手续费预览不一致")
+		}
+		tx.TxOut[0].Value = p.Amount
+		return tx, candidates, fee, 0, nil
+	}
 	tx := wire.NewMsgTx(2)
 	tx.AddTxOut(wire.NewTxOut(p.Amount, to))
 	tx.AddTxOut(wire.NewTxOut(Dust, own))
@@ -251,6 +274,42 @@ func build(p Payment) (*wire.MsgTx, []selected, int64, int64, error) {
 		tx.AddTxOut(changeOut)
 	}
 	return nil, nil, 0, 0, errors.New("已确认余额不足以支付金额和手续费")
+}
+func sweepTemplate(candidates []selected, to []byte, rate int64) (*wire.MsgTx, int64, error) {
+	tx := wire.NewMsgTx(2)
+	tx.AddTxOut(wire.NewTxOut(Dust, to))
+	var total int64
+	for _, c := range candidates {
+		if total > MaxMoney-c.Out.Value {
+			return nil, 0, errors.New("输入总金额无效")
+		}
+		total += c.Out.Value
+		tx.AddTxIn(wire.NewTxIn(&c.Outpoint, nil, wire.TxWitness{make([]byte, 64)}))
+	}
+	return tx, total, nil
+}
+
+// PlanMaximum spends exactly all eligible inputs with one output and no change.
+// It rejects more than 100 inputs rather than silently leaving part of the balance.
+func PlanMaximum(p Payment) (Quote, error) {
+	p.Amount = Dust
+	p.Sweep = true
+	_, to, candidates, e := candidatesFor(p)
+	if e != nil {
+		return Quote{}, e
+	}
+	if len(candidates) == 0 || len(candidates) > 100 {
+		return Quote{}, errors.New("发送全部需要 1–100 个可用输入，请先合并过多输入")
+	}
+	tx, total, e := sweepTemplate(candidates, to, p.Rate)
+	if e != nil {
+		return Quote{}, e
+	}
+	p.Amount = total - (int64(vsize(tx))*p.Rate+999)/1000
+	if p.Amount < Dust {
+		return Quote{}, errors.New("可用余额不足以支付手续费和最低收款金额")
+	}
+	return Plan(p)
 }
 func Plan(p Payment) (Quote, error) {
 	tx, _, fee, change, e := build(p)
@@ -357,6 +416,8 @@ func Execute(input string) (output string) {
 		wipe(b)
 	case "plan":
 		result, e = Plan(r.Payment)
+	case "planmax":
+		result, e = PlanMaximum(r.Payment)
 	case "transaction":
 		var tx *wire.MsgTx
 		tx, e = deserialize(r.Raw)

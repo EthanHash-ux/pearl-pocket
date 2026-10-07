@@ -42,8 +42,8 @@ import java.util.concurrent.Executors;
 
 /** Native Android UI with an operation-scoped local signing wallet. */
 public final class MainActivity extends Activity {
-    private static final int INK=PearlDesign.INK, GREEN=PearlDesign.TEAL, MUTED=PearlDesign.MUTED,
-            BG=PearlDesign.BG, PALE=PearlDesign.PALE, WHITE=PearlDesign.WHITE;
+    private int INK,GREEN,MUTED,BG,PALE,WHITE;
+    private boolean darkMode;
     private final ExecutorService executor = Executors.newFixedThreadPool(3);
     private final PearlApi api = new PearlApi();
     private MarketFeed marketFeed;
@@ -58,7 +58,7 @@ public final class MainActivity extends Activity {
     private TextView chartSource;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable poll = new Runnable() {
-        @Override public void run() { refreshStatus(); if (!address.isEmpty()) refreshAccount(); handler.postDelayed(this, 90_000); }
+        @Override public void run() { refreshStatus(); if (!viewAddress().isEmpty()) refreshAccount(); handler.postDelayed(this, 90_000); }
     };
     private final Runnable priceClock = new Runnable() {
         @Override public void run() { if (foreground) { updateLabels();updateMining(); handler.postDelayed(this, 1_000); } }
@@ -69,6 +69,7 @@ public final class MainActivity extends Activity {
     private SharedPreferences preferences;
     private WalletFlow walletFlow;
     private PublicTools publicTools;
+    private MiningTools miningTools;private WatchTools watchTools;private HistoryTools historyTools;private String observedAddress="";
     private MiningApi.Stats miningStats;
     private TextView miningText;
     private boolean loadingMining;
@@ -92,23 +93,26 @@ public final class MainActivity extends Activity {
     private int days = 1, chartGeneration, accountGeneration;
 
     @Override public void onCreate(Bundle state) {
+        darkMode=getSharedPreferences("public_preferences",MODE_PRIVATE).getBoolean("dark_mode",false);setTheme(darkMode?R.style.Theme_Pearl_Dark:R.style.Theme_Pearl);PearlDesign.dark(darkMode);INK=PearlDesign.INK;GREEN=PearlDesign.TEAL;MUTED=PearlDesign.MUTED;BG=PearlDesign.BG;PALE=PearlDesign.PALE;WHITE=PearlDesign.WHITE;
         super.onCreate(state);
         preferences = getSharedPreferences("public_preferences", MODE_PRIVATE);
-        publicTools=new PublicTools(this);
+        publicTools=new PublicTools(this,()->price);miningTools=new MiningTools(this,()->hideBalances);
+        historyTools=new HistoryTools(this,api,()->hideBalances);watchTools=new WatchTools(this,this::selectAddress,()->observedAddress);
+        String savedWatch=preferences.getString("observed_address","");try{for(WatchBook.Entry e:new WatchBook(PublicStore.of(this)).list())if(e.address.equals(savedWatch))observedAddress=e.address;}catch(Exception ignored){observedAddress="";}
         hideBalances=preferences.getBoolean("hide_balances",false);
-        if(getIntent().getBooleanExtra("show_market",false))page="market";
+        if(state==null){if(getIntent().getBooleanExtra("show_market",false))page="market";if(getIntent().getBooleanExtra("show_receipts",false))page="activity";}else{page=state.getString("page","wallet");days=state.getInt("days",1);transactionFilter=state.getString("transaction_filter","all");}
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
         walletFlow = new WalletFlow(this, new WalletFlow.Host() {
             @Override public void changed() { loadWallet(); render(); refresh(); }
             @Override public String address() { return address; }
         }, api);
-        loadWallet();
+        loadWallet();if(state==null)selectReceiptAddress(getIntent());
         readPriceCache();
         marketFeed = new MarketFeed(api, new MarketFeed.Listener() {
             @Override public void quote(PearlApi.Price incoming) { ui(() -> {
                 if (!foreground) return;
                 price = incoming; cachedPrice = false; priceError = ""; loadingPrice = false;
-                writePriceCache(); updateLabels(); displayChart();
+                writePriceCache();PriceWidget.cache(getApplicationContext(),incoming.usdt,incoming.change24h,incoming.updatedAt,false); updateLabels(); displayChart();
                 executor.execute(()->{try{AlertNotifications.check(getApplicationContext(),incoming.usdt,incoming.updatedAt);}catch(Exception ignored){/* Public alert settings cannot interrupt the wallet or market feed. */}});
             }); }
             @Override public void state(String text) { ui(() -> { if (foreground) { priceState = text; updateLabels(); } }); }
@@ -127,7 +131,7 @@ public final class MainActivity extends Activity {
             v.setPadding(0, top, 0, bottom); return insets;
         });
         if (android.os.Build.VERSION.SDK_INT >= 27) getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+                darkMode?0:View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         scroll = new ScrollView(this); scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);scroll.setFocusableInTouchMode(true);scroll.setDescendantFocusability(android.view.ViewGroup.FOCUS_BEFORE_DESCENDANTS);scroll.requestFocus();
         content = column(); content.setPadding(dp(22), dp(20), dp(22), dp(24)); scroll.addView(content);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -180,10 +184,10 @@ public final class MainActivity extends Activity {
         miningText=null;miningValues=null;
         if(page.equals("wallet")){
         LinearLayout header=row();
-        ImageView logo=new ImageView(this);logo.setImageResource(R.drawable.ic_pearl_mark);logo.setPadding(dp(8),dp(8),dp(8),dp(8));logo.setBackground(background(INK,0,14));header.addView(logo,new LinearLayout.LayoutParams(dp(44),dp(44)));
+        ImageView logo=new ImageView(this);logo.setImageResource(R.drawable.ic_pearl_mark);logo.setPadding(dp(8),dp(8),dp(8),dp(8));logo.setBackground(background(Color.rgb(22,43,55),0,14));header.addView(logo,new LinearLayout.LayoutParams(dp(44),dp(44)));
         LinearLayout branding=column();branding.setPadding(dp(12),0,0,0);branding.addView(text("掌珠钱包",21,INK,true));TextView wordmark=text("PEARL POCKET",11,MUTED,true);wordmark.setLetterSpacing(.13f);gap(branding,4);branding.addView(wordmark);weighted(header,branding);
         header.addView(iconButton("refresh","刷新行情和链上数据",INK,WHITE,this::refresh),new LinearLayout.LayoutParams(dp(44),dp(44)));content.addView(header);gap(content,18);
-        LinearLayout info=row();networkText=text("Pearl 主网 · 连接中",11,GREEN,true);weighted(info,networkText);TextView mode=text(address.isEmpty()?"手机独立钱包":"密钥已锁定",11,MUTED,false);info.addView(mode);content.addView(info);gap(content,20);
+        LinearLayout info=row();networkText=text("Pearl 主网 · 连接中",11,GREEN,true);weighted(info,networkText);TextView mode=text(observing()?"只读观察":address.isEmpty()?"手机独立钱包":"密钥已锁定",11,MUTED,false);mode.append(" ▾");mode.setContentDescription("切换钱包或观察地址");mode.setPadding(dp(8),dp(8),0,dp(8));mode.setOnClickListener(v->watchTools.show());info.addView(mode);content.addView(info);gap(content,20);
         }else networkText=null;
         switch (page) {
             case "market": renderMarket(); break;
@@ -197,31 +201,35 @@ public final class MainActivity extends Activity {
         int position=scrollPositions.getOrDefault(page,0);scroll.post(()->scroll.scrollTo(0,position));
     }
 
+    private String viewAddress(){return observing()?observedAddress:address;}
+    private boolean observing(){return !observedAddress.isEmpty();}
+    private void selectAddress(String selected){try{if(!selected.isEmpty()){boolean known=false;for(WatchBook.Entry e:new WatchBook(PublicStore.of(this)).list())if(e.address.equals(selected))known=true;if(!known)throw new IllegalArgumentException("观察地址不存在");}observedAddress=selected;preferences.edit().putString("observed_address",selected).apply();account=null;accountError="";accountGeneration++;loadingAccount=false;page="wallet";scrollPositions.clear();render();refresh();}catch(Exception e){walletFlow.notice("无法切换地址",e.getMessage());}}
+    private void sendFromWallet(){if(observing()){walletFlow.notice("只读观察地址","该地址的私钥不在观察模式中。切换到手机钱包后才能发送。");return;}walletFlow.send();}
     private void renderWallet(){
         LinearLayout balance=card(INK);balance.setBackground(PearlDesign.assetSurface(this));balance.setPadding(dp(23),dp(21),dp(23),dp(21));
         LinearLayout top=row();weighted(top,text("已确认余额",13,Color.rgb(192,216,221),false));top.addView(iconButton(hideBalances?"eye-off":"eye",hideBalances?"显示余额":"隐藏余额",PearlDesign.MINT,Color.TRANSPARENT,this::toggleBalances),new LinearLayout.LayoutParams(dp(44),dp(44)));balance.addView(top);gap(balance,8);
-        balanceText=text("— PRL",37,WHITE,true);balanceText.setMaxLines(1);balanceText.setAutoSizeTextTypeUniformWithConfiguration(22,37,1,android.util.TypedValue.COMPLEX_UNIT_SP);balance.addView(balanceText);gap(balance,10);
+        balanceText=text("— PRL",37,Color.WHITE,true);balanceText.setMaxLines(1);balanceText.setAutoSizeTextTypeUniformWithConfiguration(22,37,1,android.util.TypedValue.COMPLEX_UNIT_SP);balance.addView(balanceText);gap(balance,10);
         fiatText=text("创建钱包后查看资产",15,Color.rgb(206,225,227),false);balance.addView(fiatText);gap(balance,22);
-        LinearLayout footer=row();TextView secure=text("本机签名",11,PearlDesign.MINT,true);secure.setCompoundDrawables(PearlDesign.icon(this,"shield",PearlDesign.MINT,15),null,null,null);secure.setCompoundDrawablePadding(dp(5));weighted(footer,secure);
-        Button denomination=button(currency.toUpperCase(Locale.ROOT)+" ▾",WHITE,Color.argb(22,255,255,255),v->chooseCurrency());denomination.setMinHeight(dp(32));denomination.setMinimumHeight(dp(32));denomination.setPadding(dp(10),dp(3),dp(10),dp(3));denomination.setTextSize(11);denomination.setContentDescription("切换计价货币");footer.addView(denomination);balance.addView(footer);gap(balance,13);
+        LinearLayout footer=row();TextView secure=text(observing()?"只读观察":"本机签名",11,PearlDesign.MINT,true);secure.setCompoundDrawables(PearlDesign.icon(this,"shield",PearlDesign.MINT,15),null,null,null);secure.setCompoundDrawablePadding(dp(5));weighted(footer,secure);
+        Button denomination=button(currency.toUpperCase(Locale.ROOT)+" ▾",Color.WHITE,Color.argb(22,255,255,255),v->chooseCurrency());denomination.setMinHeight(dp(32));denomination.setMinimumHeight(dp(32));denomination.setPadding(dp(10),dp(3),dp(10),dp(3));denomination.setTextSize(11);denomination.setContentDescription("切换计价货币");footer.addView(denomination);balance.addView(footer);gap(balance,13);
         balanceStatus=text("密钥加密保存在本机",11,Color.rgb(185,206,211),false);balance.addView(balanceStatus);content.addView(balance);gap(content,14);
-        LinearLayout actions=row();weighted(actions,shortcut("发送","send",()->walletFlow.send()));between(actions,10);weighted(actions,shortcut("接收","receive",this::receive));between(actions,10);weighted(actions,shortcut("地址簿","contacts",()->publicTools.addressBook(null)));content.addView(actions);gap(content,20);
-        if(address.isEmpty()){
+        LinearLayout actions=row();weighted(actions,shortcut("发送","send",this::sendFromWallet));between(actions,10);weighted(actions,shortcut("接收","receive",this::receive));between(actions,10);weighted(actions,shortcut("地址簿","contacts",()->publicTools.addressBook(null)));content.addView(actions);gap(content,20);
+        if(viewAddress().isEmpty()){
             LinearLayout setup=card(WHITE);setup.addView(text("开启你的 Pearl 钱包",18,INK,true));gap(setup,8);setup.addView(text("创建新钱包，或用助记词找回你的资产。",13,MUTED,false));gap(setup,16);
             setup.addView(button("创建手机钱包",WHITE,GREEN,v->walletFlow.setup(false)));gap(setup,8);setup.addView(button("恢复已有手机钱包",GREEN,PALE,v->walletFlow.setup(true)));content.addView(setup);gap(content,18);
         }else{
-            LinearLayout wallet=card(WHITE);wallet.setPadding(dp(16),dp(16),dp(16),dp(16));LinearLayout addressRow=row();LinearLayout detail=column();detail.addView(text(walletFlow.backedUp()?"钱包地址 · 已备份":"钱包地址 · 待备份",11,MUTED,false));gap(detail,6);TextView compact=text(PearlAddress.shortLabel(address),13,INK,true);compact.setMaxLines(1);detail.addView(compact);weighted(addressRow,detail);addressRow.addView(iconButton("copy","复制钱包地址",GREEN,PALE,()->copy("Pearl 地址",address)),new LinearLayout.LayoutParams(dp(44),dp(44)));between(addressRow,6);addressRow.addView(iconButton("shield",walletFlow.backedUp()?"查看离线备份":"完成助记词备份",GREEN,BG,()->walletFlow.backup()),new LinearLayout.LayoutParams(dp(44),dp(44)));wallet.addView(addressRow);content.addView(wallet);gap(content,18);
+            LinearLayout wallet=card(WHITE);wallet.setPadding(dp(16),dp(16),dp(16),dp(16));LinearLayout addressRow=row();LinearLayout detail=column();detail.addView(text(observing()?"观察地址 · 只读":walletFlow.backedUp()?"钱包地址 · 已备份":"钱包地址 · 待备份",11,MUTED,false));gap(detail,6);TextView compact=text(PearlAddress.shortLabel(viewAddress()),13,INK,true);compact.setMaxLines(1);detail.addView(compact);weighted(addressRow,detail);addressRow.addView(iconButton("copy","复制钱包地址",GREEN,PALE,()->copy("Pearl 地址",viewAddress())),new LinearLayout.LayoutParams(dp(44),dp(44)));between(addressRow,6);addressRow.addView(iconButton("shield",observing()?"管理观察地址":walletFlow.backedUp()?"查看离线备份":"完成助记词备份",GREEN,BG,()->{if(observing())watchTools.show();else walletFlow.backup();}),new LinearLayout.LayoutParams(dp(44),dp(44)));wallet.addView(addressRow);content.addView(wallet);gap(content,18);
         }
         renderPriceCard(false);gap(content,22);LinearLayout heading=row();weighted(heading,text("最近交易",19,INK,true));Button all=button("查看全部",GREEN,BG,v->{page="activity";render();});all.setTextSize(12);heading.addView(all);content.addView(heading);gap(content,10);renderTransactions(3);
     }
 
     private void renderPriceCard(boolean large){
-        LinearLayout market=card(WHITE);LinearLayout top=row();ImageView token=new ImageView(this);token.setImageResource(R.drawable.ic_pearl_mark);token.setPadding(dp(10),dp(10),dp(10),dp(10));token.setBackground(background(GREEN,0,14));top.addView(token,new LinearLayout.LayoutParams(dp(44),dp(44)));
+        LinearLayout market=card(WHITE);LinearLayout top=row();ImageView token=new ImageView(this);token.setImageResource(R.drawable.ic_pearl_mark);token.setPadding(dp(10),dp(10),dp(10),dp(10));token.setBackground(background(Color.rgb(0,112,99),0,14));top.addView(token,new LinearLayout.LayoutParams(dp(44),dp(44)));
         LinearLayout name=column();name.setPadding(dp(12),0,0,0);name.addView(text("Pearl",17,INK,true));gap(name,4);name.addView(text("PRL · 主网原生币",11,MUTED,false));weighted(top,name);
         if(!large)top.addView(iconButton("chevron","查看 Pearl 行情",MUTED,BG,()->{page="market";render();}),new LinearLayout.LayoutParams(dp(40),dp(40)));else top.addView(text("24h",11,MUTED,false));market.addView(top);gap(market,20);
         LinearLayout numbers=row();priceText=text("—",large?34:26,INK,true);priceText.setMaxLines(1);priceText.setAutoSizeTextTypeUniformWithConfiguration(19,large?34:26,1,android.util.TypedValue.COMPLEX_UNIT_SP);weighted(numbers,priceText);changeText=text("—",12,GREEN,true);changeText.setPadding(dp(8),dp(6),dp(8),dp(6));changeText.setBackground(background(PALE,0,8));numbers.addView(changeText);market.addView(numbers);gap(market,10);
         priceStatus=text("实时行情连接中",11,MUTED,false);market.addView(priceStatus);
-        if(large){gap(market,20);segments(market,new String[]{"24 小时","7 天"},new String[]{"1","7"},String.valueOf(days),value->{days=Integer.parseInt(value);render();});
+        if(large){gap(market,20);segments(market,new String[]{"24 小时","7 天","30 天"},new String[]{"1","7","30"},String.valueOf(days),value->{days=Integer.parseInt(value);render();});
             chart=new PriceChartView(this);market.addView(chart,new LinearLayout.LayoutParams(-1,dp(235)));chartSource=text("历史行情加载中",11,MUTED,false);market.addView(chartSource);displayChart();}
         content.addView(market);
     }
@@ -234,9 +242,10 @@ public final class MainActivity extends Activity {
     }
 
     private void renderActivity(){
-        heading("交易记录",address.isEmpty()?"创建钱包后查看你的收发记录。":PearlAddress.shortLabel(address)+" · 最近 10 笔");
+        heading("交易记录",viewAddress().isEmpty()?"选择钱包或观察地址后查看记录。":PearlAddress.shortLabel(viewAddress())+" · 最近 10 笔");
+        content.addView(button("完整交易历史 / 搜索 / 导出",GREEN,PALE,v->historyTools.show(viewAddress())));gap(content,14);
         segments(content,new String[]{"全部","接收","发送"},new String[]{"all","received","sent"},transactionFilter,value->{transactionFilter=value;render();});gap(content,18);renderTransactions(10);
-        if(account!=null&&account.transactionCount>10){gap(content,16);content.addView(button("在浏览器查看完整记录",GREEN,PALE,v->open("https://explorer.pearlresearch.ai/address/"+address+"?network=mainnet")));}
+        if(account!=null&&account.transactionCount>10){gap(content,16);content.addView(button("在浏览器查看完整记录",GREEN,PALE,v->open("https://explorer.pearlresearch.ai/address/"+viewAddress()+"?network=mainnet")));}
     }
 
     private void renderTransactions(int limit) {
@@ -268,13 +277,13 @@ public final class MainActivity extends Activity {
 
     private void renderSettings(){
         heading("偏好与安全","计价、隐私与钱包管理");
-        LinearLayout settings=card(WHITE);settings.addView(text("计价货币",15,INK,true));gap(settings,14);segments(settings,new String[]{"USDT","USD 美元","CNY 人民币"},new String[]{"usdt","usd","cny"},currency,this::changeCurrency);content.addView(settings);gap(content,16);
+        LinearLayout settings=card(WHITE);settings.addView(text("计价货币",15,INK,true));gap(settings,14);segments(settings,new String[]{"USDT","USD 美元","CNY 人民币"},new String[]{"usdt","usd","cny"},currency,this::changeCurrency);content.addView(settings);gap(content,16);content.addView(button(darkMode?"切换为浅色模式":"切换为深色模式",GREEN,PALE,v->{preferences.edit().putBoolean("dark_mode",!darkMode).apply();recreate();}));gap(content,16);
         LinearLayout privacy=card(WHITE);LinearLayout line=row();LinearLayout words=column();words.addView(text("隐藏资产金额",15,INK,true));gap(words,6);words.addView(text("钱包与记录页隐藏余额和交易金额",12,MUTED,false));weighted(line,words);android.widget.Switch toggle=new android.widget.Switch(this);toggle.setContentDescription("隐藏资产金额");toggle.setChecked(hideBalances);toggle.setThumbTintList(android.content.res.ColorStateList.valueOf(WHITE));toggle.setTrackTintList(new android.content.res.ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{GREEN,Color.rgb(142,162,174)}));toggle.setOnCheckedChangeListener((b,checked)->{hideBalances=checked;preferences.edit().putBoolean("hide_balances",checked).apply();});line.addView(toggle);privacy.addView(line);gap(privacy,10);privacy.addView(text("转账确认仍显示实际金额，便于准确核对。",11,MUTED,false));content.addView(privacy);gap(content,16);
-        LinearLayout wallet=card(WHITE);wallet.addView(text("钱包安全",16,INK,true));gap(wallet,8);wallet.addView(text(address.isEmpty()?"在本机创建钱包，私钥加密保存。":"查看备份与每次签名，都需要手机验证和钱包密码。",13,MUTED,false));gap(wallet,15);
+        LinearLayout wallet=card(WHITE);wallet.addView(text("手机钱包安全",16,INK,true));gap(wallet,8);wallet.addView(text(address.isEmpty()?"在本机创建钱包，私钥加密保存。":"查看备份与每次签名，都需要手机验证和钱包密码。",13,MUTED,false));gap(wallet,15);
         if(address.isEmpty()){wallet.addView(button("创建手机钱包",WHITE,GREEN,v->walletFlow.setup(false)));gap(wallet,8);wallet.addView(button("恢复已有手机钱包",GREEN,PALE,v->walletFlow.setup(true)));}
         else{wallet.addView(button(walletFlow.backedUp()?"查看离线备份":"完成助记词备份",GREEN,PALE,v->walletFlow.backup()));gap(wallet,8);wallet.addView(button("查询或重发待确认交易",INK,BG,v->walletFlow.pendingStatus()));gap(wallet,8);wallet.addView(button("钱包恢复兼容性",MUTED,WHITE,v->walletFlow.notice("钱包恢复兼容性","支持本应用 BIP39 英文 12 / 15 / 18 / 21 / 24 词，BIP39 附加口令为空。使用 Pearl 主网 Taproot 地址，固定收款与找零地址。尚不支持 Oyster XMSS 全钱包恢复。")));}
-        content.addView(wallet);gap(content,16);LinearLayout tools=card(WHITE);tools.addView(text("日常工具",16,INK,true));gap(tools,12);tools.addView(button("地址簿",GREEN,BG,v->publicTools.addressBook(null)));gap(tools,8);tools.addView(button("价格提醒",GREEN,BG,v->publicTools.priceAlerts()));content.addView(tools);gap(content,16);
-        LinearLayout sources=card(WHITE);sources.addView(text("关于掌珠钱包",16,INK,true));gap(sources,8);sources.addView(text("Pearl Pocket · 0.5.0\nPearl Mainnet · 手机独立钱包",13,MUTED,false));gap(sources,14);sources.addView(button("数据来源",INK,BG,v->walletFlow.notice("数据来源","链上：Pearl 官方 Blockbook\n行情：BigONE PRL/USDT 实时推送\n汇率 / 备用参考：CoinGecko\n矿池：HeroMiners 公开统计")));gap(sources,8);sources.addView(button("查看掌珠钱包源码",GREEN,WHITE,v->open("https://github.com/EthanHash-ux/pearl-pocket")));content.addView(sources);
+        content.addView(wallet);gap(content,16);LinearLayout tools=card(WHITE);tools.addView(text("日常工具",16,INK,true));gap(tools,12);tools.addView(button("桌面价格小组件",GREEN,BG,v->PriceWidget.pin(this)));gap(tools,8);tools.addView(button(preferences.getBoolean("receipt_notifications",false)?"关闭收款通知":"启用收款通知",GREEN,BG,v->receiptSettings()));gap(tools,8);tools.addView(button("观察地址管理",GREEN,BG,v->watchTools.show()));gap(tools,8);tools.addView(button("完整交易历史",GREEN,BG,v->historyTools.show(viewAddress())));gap(tools,8);tools.addView(button("地址簿",GREEN,BG,v->publicTools.addressBook(null)));gap(tools,8);tools.addView(button("价格提醒",GREEN,BG,v->publicTools.priceAlerts()));content.addView(tools);gap(content,16);
+        LinearLayout sources=card(WHITE);sources.addView(text("关于掌珠钱包",16,INK,true));gap(sources,8);sources.addView(text("Pearl Pocket · 0.6.0\nPearl Mainnet · 手机独立钱包",13,MUTED,false));gap(sources,14);sources.addView(button("数据来源",INK,BG,v->walletFlow.notice("数据来源","链上：Pearl 官方 Blockbook\n行情：BigONE PRL/USDT 实时推送\n汇率 / 备用参考：CoinGecko\n矿池：HeroMiners 公开统计")));gap(sources,8);sources.addView(button("查看掌珠钱包源码",GREEN,WHITE,v->open("https://github.com/EthanHash-ux/pearl-pocket")));content.addView(sources);
     }
 
     private void transactionDetail(PearlApi.Transaction tx){
@@ -283,7 +292,7 @@ public final class MainActivity extends Activity {
                 .setNegativeButton("关闭",null).setNeutralButton("复制交易 ID",(x,w)->copy("Pearl 交易 ID",tx.id)).setPositiveButton("区块浏览器",(x,w)->open("https://explorer.pearlresearch.ai/tx/"+tx.id+"?network=mainnet")).create();d.show();PearlDesign.dialog(d);
     }
     private void renderMining(){
-        heading("矿业工作台","矿池动态与收益情景，一目了然。");
+        heading("矿业工作台","矿池动态与收益情景，一目了然。");content.addView(button("个人矿工监控",GREEN,PALE,v->miningTools.list()));gap(content,14);
         LinearLayout pool=card(WHITE);LinearLayout title=row();weighted(title,text("HeroMiners",18,INK,true));TextView coin=text("PEARL · PRL",11,GREEN,true);coin.setPadding(dp(9),dp(5),dp(9),dp(5));coin.setBackground(background(PALE,0,8));title.addView(coin);pool.addView(title);gap(pool,18);
         miningValues=new TextView[6];String[] labels={"矿池总算力","全网算力","占全网比例","矿工 / 工作器","矿池费率","主网高度"};
         for(int r=0;r<3;r++){LinearLayout metrics=row();for(int c=0;c<2;c++){int i=r*2+c;LinearLayout cell=column();cell.setPadding(dp(12),dp(12),dp(10),dp(12));cell.setBackground(background(BG,0,12));cell.addView(text(labels[i],11,MUTED,false));gap(cell,9);miningValues[i]=text("—",18,INK,true);miningValues[i].setMaxLines(1);miningValues[i].setAutoSizeTextTypeUniformWithConfiguration(13,18,1,android.util.TypedValue.COMPLEX_UNIT_SP);cell.addView(miningValues[i]);weighted(metrics,cell);if(c==0)between(metrics,10);}pool.addView(metrics);gap(pool,10);}
@@ -324,8 +333,8 @@ public final class MainActivity extends Activity {
             if (account != null && price != null && price.isFresh(System.currentTimeMillis() / 1000) && priceError.isEmpty()) value = "≈ " + PearlAmount.fiat(account.balance, price.value(price.displayCurrency(currency)), price.displayCurrency(currency));
             if (account != null && account.unconfirmed.signum() != 0) value += " · 未确认 " + PearlAmount.format(account.unconfirmed) + " PRL";
             fiatText.setText(hideBalances?"资产金额已隐藏":value);
-            balanceStatus.setText(address.isEmpty() ? "创建或恢复后即可收款" : !accountError.isEmpty() ? "数据刷新失败 · " + accountError
-                    : account == null ? "本地钱包 · " + (loadingAccount ? "加载中" : "未获取数据") : "密钥已锁定 · 更新于 " + time(accountUpdatedAt));
+            balanceStatus.setText(viewAddress().isEmpty() ? "创建或恢复后即可收款" : !accountError.isEmpty() ? "数据刷新失败 · " + accountError
+                    : account == null ? (observing()?"观察地址 · ":"本地钱包 · ") + (loadingAccount ? "加载中" : "未获取数据") : (observing()?"只读地址":"密钥已锁定")+" · 更新于 " + time(accountUpdatedAt));
         }
         if (priceText != null) {
             String actual = price == null ? currency : price.displayCurrency(currency);
@@ -361,7 +370,7 @@ public final class MainActivity extends Activity {
     }
 
     private void refresh() {
-        refreshPrice(); refreshStatus(); if (!address.isEmpty()) refreshAccount(); if (chart != null) refreshChart();
+        refreshPrice(); refreshStatus(); if (!viewAddress().isEmpty()) refreshAccount(); if (chart != null) refreshChart();
         if(page.equals("mining"))refreshMining();
     }
     private void refreshPrice() { if (marketFeed != null) marketFeed.refresh(); }
@@ -374,15 +383,15 @@ public final class MainActivity extends Activity {
     }
     private void refreshAccount() {
         if (loadingAccount) return; loadingAccount = true;
-        String requestAddress = address; int generation = ++accountGeneration; updateLabels();
+        String requestAddress = viewAddress(); int generation = ++accountGeneration; updateLabels();
         executor.execute(() -> {
             try { PearlApi.Account result = api.account(requestAddress); ui(() -> {
-                if (generation != accountGeneration || !requestAddress.equals(address)) return;
-                account = result; accountError = ""; loadingAccount = false; accountUpdatedAt = System.currentTimeMillis() / 1000;
+                if (generation != accountGeneration || !requestAddress.equals(viewAddress())) return;
+                executor.execute(()->{try{ReceiptNotifications.check(getApplicationContext(),requestAddress,result);}catch(Exception ignored){}});account = result; accountError = ""; loadingAccount = false; accountUpdatedAt = System.currentTimeMillis() / 1000;
                 if (page.equals("wallet") || page.equals("activity")) render(); else updateLabels();
             }); }
             catch (Exception e) { ui(() -> {
-                if (generation != accountGeneration || !requestAddress.equals(address)) return;
+                if (generation != accountGeneration || !requestAddress.equals(viewAddress())) return;
                 loadingAccount = false; accountError = message(e); if (page.equals("wallet") || page.equals("activity")) render(); else updateLabels();
             }); }
         });
@@ -413,7 +422,7 @@ public final class MainActivity extends Activity {
             for (double[] point : chartData) converted.add(new double[]{point[0], point[1] * rate.doubleValue()});
             chart.setPoints(converted, actual); chartShownCurrency = actual; chartShownRate = rate;
         }
-        if (chartSource != null) chartSource.setText(chartUsesMarket ? "BigONE · PRL/USDT · " + (days == 1 ? "5 分钟" : "1 小时") + "收盘价" + (!actual.equals("usdt") ? " · " + actual.toUpperCase(Locale.ROOT) + "折算" : "") : "CoinGecko · 参考历史行情");
+        if (chartSource != null) chartSource.setText(chartUsesMarket ? "BigONE · PRL/USDT · " + (days == 1 ? "5 分钟" : days==7?"1 小时":"1 天") + "收盘价" + (!actual.equals("usdt") ? " · " + actual.toUpperCase(Locale.ROOT) + "折算" : "") : "CoinGecko · 参考历史行情");
         if (chartUsesMarket && price != null && price.usdt != null && price.isFresh(System.currentTimeMillis()/1000)) chart.livePrice(price.updatedAt * 1000, price.usdt.multiply(rate).doubleValue());
     }
     private void ui(Runnable action) { runOnUiThread(() -> { if (!isFinishing() && !isDestroyed()) action.run(); }); }
@@ -423,7 +432,7 @@ public final class MainActivity extends Activity {
     private void loadWallet() {
         try {
             String next = walletFlow.address();
-            if (!next.equals(address)) { address = next; account = null; accountGeneration++; loadingAccount = false; }
+            if (!next.equals(address)) { address = next;preferences.edit().putString("receipt_signer",address).apply();ReceiptNotifications.schedule(this);account = null; accountGeneration++; loadingAccount = false; }
         } catch (Exception e) { accountError = "钱包文件无法读取，请使用离线备份恢复"; }
     }
 
@@ -431,28 +440,29 @@ public final class MainActivity extends Activity {
         receive("");
     }
     private void receive(String requestedAmount) {
-        if (address.isEmpty()) { walletFlow.notice("先创建钱包", "创建或恢复手机钱包后，会生成你的 Pearl 主网收款地址。"); return; }
-        String payload=requestedAmount.isEmpty()?address:PaymentRequest.encode(address,requestedAmount);
+        if (viewAddress().isEmpty()) { walletFlow.notice("先创建钱包", "创建或恢复手机钱包后，会生成你的 Pearl 主网收款地址。"); return; }
+        String receiveAddress=viewAddress();String payload=requestedAmount.isEmpty()?receiveAddress:PaymentRequest.encode(receiveAddress,requestedAmount);
         LinearLayout receive = column(); receive.setPadding(dp(24), dp(8), dp(24), dp(12)); receive.setGravity(Gravity.CENTER_HORIZONTAL);
-        receive.addView(text("仅接收 Pearl 主网 PRL，请核对完整地址。", 12, MUTED, false)); gap(receive, 18);
+        receive.addView(text(observing()?"只读观察地址：此手机不控制该地址。请核对收款方，资金需由对应钱包管理。":"仅接收 Pearl 主网 PRL，请核对完整地址。",12,MUTED,false)); gap(receive, 18);
         if(!requestedAmount.isEmpty())receive.addView(text("请求收款 "+requestedAmount+" PRL\n带金额二维码适用于 Pearl Pocket。其他钱包可复制地址手动填写金额。",12,GREEN,true));
         try {
             BitMatrix bits = new MultiFormatWriter().encode(payload, BarcodeFormat.QR_CODE, 600, 600,
                     Collections.singletonMap(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M));
             Bitmap image = Bitmap.createBitmap(600, 600, Bitmap.Config.ARGB_8888);
             int[] pixels = new int[600 * 600];
-            for (int y = 0; y < 600; y++) for (int x = 0; x < 600; x++) pixels[y * 600 + x] = bits.get(x, y) ? GREEN : WHITE;
+            for (int y = 0; y < 600; y++) for (int x = 0; x < 600; x++) pixels[y * 600 + x] = bits.get(x, y) ? Color.BLACK : Color.WHITE;
             image.setPixels(pixels, 0, 600, 0, 0, 600, 600);
             ImageView qr = new ImageView(this); qr.setImageBitmap(image); qr.setContentDescription("Pearl 地址收款二维码"); receive.addView(qr, new LinearLayout.LayoutParams(dp(225), dp(225)));
         } catch (Exception e) { receive.addView(text("二维码生成失败，请复制完整地址", 12, MUTED, false)); }
-        gap(receive, 14); TextView full = text(address, 13, INK, true); full.setTextIsSelectable(true); full.setGravity(Gravity.CENTER); receive.addView(full); gap(receive, 14);
+        gap(receive, 14); TextView full = text(receiveAddress, 13, INK, true); full.setTextIsSelectable(true); full.setGravity(Gravity.CENTER); receive.addView(full); gap(receive, 14);
         receive.addView(button("复制地址", WHITE, GREEN, v -> {
-            ((ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Pearl 地址", address));
+            ((ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Pearl 地址",receiveAddress));
             Toast.makeText(this, "已复制地址", Toast.LENGTH_SHORT).show();
         })); gap(receive, 8); receive.addView(button("分享地址", GREEN, PALE, v -> {
-            Intent share = new Intent(Intent.ACTION_SEND); share.setType("text/plain"); share.putExtra(Intent.EXTRA_TEXT, address); startActivity(Intent.createChooser(share, "分享 Pearl 地址"));
+            Intent share = new Intent(Intent.ACTION_SEND); share.setType("text/plain"); share.putExtra(Intent.EXTRA_TEXT,receiveAddress); startActivity(Intent.createChooser(share, "分享 Pearl 地址"));
         }));
         gap(receive,8);receive.addView(button("指定收款金额",GREEN,PALE,v->requestAmount()));
+        gap(receive,8);receive.addView(button("分享收款二维码图片",GREEN,PALE,v->{try{startActivity(PublicShareProvider.intent(this,QrImage.png(payload,receiveAddress,requestedAmount),"png","分享 Pearl 收款二维码"));}catch(Exception e){walletFlow.notice("无法分享二维码",e.getMessage());}}));
         if(!requestedAmount.isEmpty()){gap(receive,8);receive.addView(button("复制收款请求",GREEN,WHITE,v->copy("Pearl Pocket 收款请求",payload)));}
         ScrollView scroll=new ScrollView(this);scroll.addView(receive);
         if(receiveDialog!=null)receiveDialog.dismiss();
@@ -467,10 +477,15 @@ public final class MainActivity extends Activity {
     private void copy(String title,String value){((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText(title,value));Toast.makeText(this,"已复制",Toast.LENGTH_SHORT).show();}
 
     @Override protected void onActivityResult(int request, int result, Intent data) { super.onActivityResult(request, result, data); if (request == WalletFlow.AUTH) walletFlow.authResult(result); if(request==QrScannerActivity.REQUEST)walletFlow.scanResult(result,data); }
-    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){super.onRequestPermissionsResult(request,permissions,results);if(request==PublicTools.NOTIFICATIONS){AlertNotifications.schedule(this);handler.post(()->{if(foreground)publicTools.priceAlerts();});}}
-    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(intent.getBooleanExtra("show_market",false)){page="market";render();}}
+    private void selectReceiptAddress(Intent intent){String selected=intent.getStringExtra("receipt_address");if(selected==null)return;try{selected=PearlAddress.normalize(selected);if(selected.equals(address))observedAddress="";else for(WatchBook.Entry e:new WatchBook(PublicStore.of(this)).list())if(e.address.equals(selected))observedAddress=e.address;preferences.edit().putString("observed_address",observedAddress).apply();}catch(Exception ignored){}}
+    private void receiptSettings(){if(preferences.getBoolean("receipt_notifications",false)){preferences.edit().putBoolean("receipt_notifications",false).apply();ReceiptNotifications.schedule(this);render();return;}
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("启用收款通知？").setMessage("检查手机钱包和已添加的观察地址。后台约每 15 分钟检查最新记录，系统可能延迟；短时间大量交易可能漏检，完整结果请查看历史。首次检查建立基线，不补发历史通知。地址会发送给 Pearl 官方 Blockbook，后台不读取私钥。待确认与首次链上确认分别提醒；确认数可能因链重组改变。").setNegativeButton("取消",null).setPositiveButton("启用",(x,w)->{preferences.edit().putBoolean("receipt_notifications",true).apply();if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},4212);else ReceiptNotifications.schedule(this);render();}).create();d.show();PearlDesign.dialog(d);
+    }
+    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){super.onRequestPermissionsResult(request,permissions,results);if(request==4212){ReceiptNotifications.schedule(this);render();}if(request==PublicTools.NOTIFICATIONS){AlertNotifications.schedule(this);handler.post(()->{if(foreground)publicTools.priceAlerts();});}}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(intent.getBooleanExtra("show_market",false)){page="market";render();}if(intent.getBooleanExtra("show_receipts",false)){selectReceiptAddress(intent);account=null;accountGeneration++;loadingAccount=false;page="activity";render();refreshAccount();}}
     private void open(String url) { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
-    @Override public void onResume() { super.onResume(); foreground = true; AlertNotifications.schedule(this);if (marketFeed != null) marketFeed.start(); handler.removeCallbacks(priceClock); handler.post(priceClock); handler.removeCallbacks(chartPoll); handler.postDelayed(chartPoll, 60_000); if (walletFlow != null) { walletFlow.resume(); loadWallet(); render(); } handler.removeCallbacks(poll); handler.postDelayed(poll, 90_000); updateLabels(); }
-    @Override public void onPause() { foreground = false; if(receiveDialog!=null){receiveDialog.dismiss();receiveDialog=null;}if(publicTools!=null)publicTools.pause();if (marketFeed != null) marketFeed.stop(); handler.removeCallbacks(priceClock); handler.removeCallbacks(chartPoll); if (walletFlow != null) walletFlow.pause(); handler.removeCallbacks(poll); super.onPause(); }
-    @Override public void onDestroy() { if (marketFeed != null) marketFeed.close(); handler.removeCallbacks(priceClock); handler.removeCallbacks(chartPoll); if (walletFlow != null) walletFlow.close(); handler.removeCallbacks(poll); accountGeneration++; chartGeneration++; executor.shutdownNow(); super.onDestroy(); }
+    @Override protected void onSaveInstanceState(Bundle state){state.putString("page",page);state.putInt("days",days);state.putString("transaction_filter",transactionFilter);super.onSaveInstanceState(state);}
+    @Override public void onResume() { super.onResume(); foreground = true; AlertNotifications.schedule(this);ReceiptNotifications.schedule(this);if (marketFeed != null) marketFeed.start(); handler.removeCallbacks(priceClock); handler.post(priceClock); handler.removeCallbacks(chartPoll); handler.postDelayed(chartPoll, 60_000); if (walletFlow != null) { walletFlow.resume(); loadWallet(); render(); } handler.removeCallbacks(poll); handler.postDelayed(poll, 90_000); updateLabels(); }
+    @Override public void onPause() { foreground = false; if(receiveDialog!=null){receiveDialog.dismiss();receiveDialog=null;}if(publicTools!=null)publicTools.pause();if(watchTools!=null)watchTools.pause();if(miningTools!=null)miningTools.pause();if(historyTools!=null)historyTools.pause();if (marketFeed != null) marketFeed.stop(); handler.removeCallbacks(priceClock); handler.removeCallbacks(chartPoll); if (walletFlow != null) walletFlow.pause(); handler.removeCallbacks(poll); super.onPause(); }
+    @Override public void onDestroy() { if (marketFeed != null) marketFeed.close(); handler.removeCallbacks(priceClock); handler.removeCallbacks(chartPoll); if (walletFlow != null) walletFlow.close(); handler.removeCallbacks(poll); accountGeneration++; chartGeneration++;if(historyTools!=null)historyTools.close();if(miningTools!=null)miningTools.close();executor.shutdownNow(); super.onDestroy(); }
 }

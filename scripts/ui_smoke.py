@@ -34,7 +34,7 @@ def main():
                  'ai.pearl.wallet.test/androidx.test.runner.AndroidJUnitRunner', timeout=360).stdout
     (project/'artifacts/ui-smoke-run.txt').write_text(output)
     assert 'OK (5 tests)' in output and 'FAILURES' not in output, 'UI checks failed; inspect ui-smoke-run.txt'
-    report = {'result': 'PASS', 'version': '0.5.0', 'device': args.serial,
+    report = {'result': 'PASS', 'version': '0.6.0', 'device': args.serial,
               'checked': ['24-word creation and backup verification', '24-word bulk restore preserves address',
                           '12-word clipboard restore and count selection', 'spelling/checksum block continuation',
                           '15/18/21-word count selection, bulk/clipboard restore and encrypted vault reload',

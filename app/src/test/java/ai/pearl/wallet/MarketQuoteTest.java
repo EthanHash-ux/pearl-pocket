@@ -33,7 +33,7 @@ public class MarketQuoteTest {
     @Test public void exchangeCandleTimesAreSortedAndInvalidDataRejected()throws Exception{
         PearlApi api=new PearlApi(url->{assertTrue(url.contains("PRL-USDT/candles"));return "{\"code\":0,\"data\":[{\"time\":\"2026-10-07T12:05:00Z\",\"close\":\"1.2345\"},{\"time\":\"2026-10-07T12:00:00Z\",\"close\":\"1.2\"}]}";});
         java.util.List<double[]> chart=api.marketChart(1);assertTrue(chart.get(0)[0]<chart.get(1)[0]);assertEquals(1.2345,chart.get(1)[1],0.000001);
-        assertThrows(IllegalArgumentException.class,()->api.marketChart(30));
+        assertThrows(IllegalArgumentException.class,()->api.marketChart(31));
     }
     @Test public void textAndCompressedFramesDecodeButOversizedInflationIsRejected()throws Exception{
         String text="{\"tickerUpdate\":{\"ticker\":{\"market\":\"PRL-USDT\",\"open\":\"1.1\",\"close\":\"1.21\"}}}";

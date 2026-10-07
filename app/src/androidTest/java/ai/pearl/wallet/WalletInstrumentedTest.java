@@ -74,6 +74,10 @@ public class WalletInstrumentedTest {
         assertEquals(2,attempts.get()); restarted.clear(); assertNull(restarted.load());
         quote.put("fee", "0"); byte[] fixed = new byte[32]; assertThrows(IllegalArgumentException.class, () -> NativeCore.sign(fixed, quote));
     }
+    @Test public void nativeMaximumFeeAndSingleOutputSign()throws Exception{
+        JSONObject data;try(java.io.InputStream in=InstrumentationRegistry.getInstrumentation().getContext().getAssets().open("signing-fixture.json")){data=new JSONObject(new String(in.readAllBytes(),StandardCharsets.UTF_8));}
+        JSONObject quote=NativeCore.call(new JSONObject().put("action","planmax").put("payment",data.getJSONObject("payment")));assertTrue(quote.getJSONObject("payment").getBoolean("sweep"));assertEquals("0",quote.getString("change"));byte[] entropy=Base64.decode(data.getString("entropy"),Base64.NO_WRAP);try{JSONObject signed=NativeCore.sign(entropy,quote);assertEquals(quote.getString("fee"),signed.getString("fee"));assertEquals(quote.getInt("vsize"),signed.getInt("vsize"));assertEquals(signed.getString("txid"),NativeCore.call(new JSONObject().put("action","transaction").put("raw",signed.getString("raw"))).getString("txid"));}finally{Arrays.fill(entropy,(byte)0);}
+    }
     @Test public void passwordCipherWrongPasswordAndTamperingRejected() throws Exception {
         char[] password = "Test-wallet-password-42".toCharArray(); byte[] salt = WalletVault.random(32), iv = WalletVault.random(12), aad = "bound metadata".getBytes(StandardCharsets.UTF_8), entropy = new byte[32];
         byte[] key = WalletVault.passwordKey(password, salt);

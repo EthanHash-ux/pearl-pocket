@@ -6,4 +6,14 @@
     <string name="mnemonic_twenty_four">24 个词</string>
     <string name="mnemonic_paste">粘贴整段助记词</string>
     <string name="mnemonic_paste_count">粘贴内容需要正好包含 12、15、18、21 或 24 个 BIP39 英文助记词</string>
+    <string name="history_status">当前页 %1$d 笔 · 匹配 %2$d 笔 · 第 %3$d / %4$d 页%5$s</string>
+    <string name="history_loading">正在加载第 %1$d 页…</string>
+    <string name="history_load_error">加载失败：%1$s</string>
+    <string name="history_export_error">导出停止：%1$s</string>
+    <string name="history_export_progress">已读取 %1$d / %2$d 页</string>
+    <string name="miner_received">接收时间：%1$s\n%2$s</string>
+    <string name="miner_read_error">读取失败：%1$s</string>
+    <string name="widget_title">PEARL · PRL / USDT · BigONE</string>
+    <string name="widget_empty">— USDT</string>
+    <string name="widget_refresh">刷新</string>
 </resources>

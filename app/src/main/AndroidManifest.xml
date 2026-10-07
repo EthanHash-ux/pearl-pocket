@@ -23,5 +23,11 @@
         </activity>
         <activity android:name=".QrScannerActivity" android:exported="false" />
         <service android:name=".PriceAlertJob" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service android:name=".ReceiptJob" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <receiver android:name=".PriceWidget" android:exported="false">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/price_widget_info" />
+        </receiver>
+        <provider android:name=".PublicShareProvider" android:authorities="ai.pearl.wallet.publicshare" android:exported="false" android:grantUriPermissions="true" />
     </application>
 </manifest>

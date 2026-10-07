@@ -81,7 +81,7 @@ public class PearlCoreTest {
     @Test public void chartRejectsUnorderedOrInvalidData() throws Exception {
         PearlApi api = new PearlApi(url -> "{\"prices\":[[1000,1.2],[2000,1.3]]}");
         assertEquals(2, api.chart(1, "usd").size());
-        assertThrows(IllegalArgumentException.class, () -> api.chart(30, "usd"));
+        assertThrows(IllegalArgumentException.class, () -> api.chart(31, "usd"));
         assertThrows(IllegalArgumentException.class, () -> new PearlApi(url -> "{\"prices\":[[1000,1],[1000,2]]}").chart(1, "usd"));
         assertThrows(IllegalArgumentException.class, () -> new PearlApi(url -> "{\"prices\":[[1000,0],[2000,2]]}").chart(1, "usd"));
     }

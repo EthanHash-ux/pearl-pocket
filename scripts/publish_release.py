@@ -10,12 +10,12 @@ import sys
 import zipfile
 
 PROJECT = Path(__file__).resolve().parent.parent
-VERSION = '0.5.0'
+VERSION = '0.6.0'
 TAG = 'v' + VERSION
 ASSETS = [f'pearl-wallet-android-{VERSION}.apk', 'pearl-wallet-android-source.zip',
           'SHA256SUMS', 'TEST_REPORT.md', 'verification.json',
           'simnet-transfer.json', 'apk-signature.txt',
-          'ui-wallet.png', 'ui-market.png', 'ui-mining.png', 'ui-settings.png']
+          'ui-wallet.png', 'ui-market.png', 'ui-mining.png', 'ui-settings.png', 'ui-wallet-dark.png', 'ui-market-dark.png']
 
 
 def run(*args, check=True):

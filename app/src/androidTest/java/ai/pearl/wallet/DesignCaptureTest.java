@@ -26,10 +26,10 @@ public class DesignCaptureTest {
         assertEquals("1",device.executeShellCommand("getprop ro.kernel.qemu").trim());
         String address=new WalletVault(context).metadata().getString("address");boolean publicFixture=false;
         for(int bytes:new int[]{16,20,24,28,32})if(address.equals(NativeCore.address(new byte[bytes])))publicFixture=true;
-        assertTrue("Never capture an unknown wallet",publicFixture);context.getSharedPreferences("public_preferences",Context.MODE_PRIVATE).edit().putBoolean("hide_balances",false).commit();
+        assertTrue("Never capture an unknown wallet",publicFixture);context.getSharedPreferences("public_preferences",Context.MODE_PRIVATE).edit().putBoolean("hide_balances",false).putBoolean("dark_mode",false).remove("observed_address").commit();
         Instrumentation.ActivityMonitor monitor=instrument.addMonitor(MainActivity.class.getName(),null,false);
         context.startActivity(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Activity activity=instrument.waitForMonitorWithTimeout(monitor,15000);instrument.removeMonitor(monitor);assertNotNull(activity);
-        assertTrue(device.wait(Until.hasObject(By.text("掌珠钱包")),10000));
+        assertTrue(device.wait(Until.hasObject(By.text("掌珠钱包")),10000));assertTrue((activity.getWindow().getAttributes().flags&WindowManager.LayoutParams.FLAG_SECURE)!=0);
         File output=context.getExternalFilesDir(null);assertNotNull(output);
         try{
             // Instrumentation temporarily permits captures of these verified public screens only.
@@ -40,6 +40,10 @@ public class DesignCaptureTest {
             tap(device,"挖矿");device.wait(Until.hasObject(By.textContains("接收 ")),30000);Thread.sleep(600);capture(device,new File(output,"ui-mining.png"));
             tap(device,"设置");Thread.sleep(400);capture(device,new File(output,"ui-settings.png"));
         }finally{instrument.runOnMainSync(()->{activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);activity.finish();});}
+        context.getSharedPreferences("public_preferences",Context.MODE_PRIVATE).edit().putBoolean("dark_mode",true).commit();
+        Instrumentation.ActivityMonitor nightMonitor=instrument.addMonitor(MainActivity.class.getName(),null,false);context.startActivity(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Activity night=instrument.waitForMonitorWithTimeout(nightMonitor,15000);instrument.removeMonitor(nightMonitor);assertNotNull(night);assertTrue((night.getWindow().getAttributes().flags&WindowManager.LayoutParams.FLAG_SECURE)!=0);
+        try{instrument.runOnMainSync(()->night.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE));device.wait(Until.hasObject(By.textContains("BigONE ·")),40000);Thread.sleep(600);capture(device,new File(output,"ui-wallet-dark.png"));tap(device,"行情");device.wait(Until.hasObject(By.textContains("收盘价")),30000);Thread.sleep(600);capture(device,new File(output,"ui-market-dark.png"));}
+        finally{instrument.runOnMainSync(()->{night.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);night.finish();});context.getSharedPreferences("public_preferences",Context.MODE_PRIVATE).edit().putBoolean("dark_mode",false).commit();}
     }
     private void tap(UiDevice device,String name){UiObject2 item=device.wait(Until.findObject(By.text(name)),10000);assertNotNull(item);item.click();}
     private void capture(UiDevice device,File output){

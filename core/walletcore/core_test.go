@@ -356,3 +356,59 @@ func TestPaymentToP2MRRecipient(t *testing.T) {
 		t.Fatal("incorrect P2MR recipient output")
 	}
 }
+
+func TestMaximumSpendsAllMatureInputsAndSignsExactOneOutput(t *testing.T) {
+	p, b := payment(t, 1000000, 2000000)
+	p.UTXOs = append(p.UTXOs, funding(t, p.From, 9000000, 9, true, 1), funding(t, p.From, 8000000, 10, false, 0))
+	q, e := PlanMaximum(p)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if !q.Payment.Sweep || q.Change != 0 || q.Payment.Amount+q.Fee != 3000000 {
+		t.Fatalf("maximum quote is not exact: %+v", q)
+	}
+	signed, e := Sign(b, q)
+	if e != nil {
+		t.Fatal(e)
+	}
+	tx, e := deserialize(signed.Raw)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(tx.TxIn) != 2 || len(tx.TxOut) != 1 || tx.TxOut[0].Value != q.Payment.Amount || signed.Fee != q.Fee {
+		t.Fatal("sweep transaction shape/amount differs")
+	}
+	q.Payment.Amount--
+	if _, e = Sign(b, q); e == nil {
+		t.Fatal("accepted changed sweep amount")
+	}
+}
+func TestMaximumRejectsInvalidInputsAndUnpayableFees(t *testing.T) {
+	p, _ := payment(t, 100)
+	if _, e := PlanMaximum(p); e == nil {
+		t.Fatal("accepted insufficient sweep balance")
+	}
+	p, _ = payment(t, 1000000)
+	p.UTXOs = append(p.UTXOs, p.UTXOs[0])
+	if _, e := PlanMaximum(p); e == nil {
+		t.Fatal("accepted duplicate sweep inputs")
+	}
+	p, _ = payment(t, 1000000)
+	p.UTXOs[0].Confirmations = 0
+	if _, e := PlanMaximum(p); e == nil {
+		t.Fatal("swept unconfirmed input")
+	}
+	amounts := make([]int64, 101)
+	for i := range amounts {
+		amounts[i] = 1000000
+	}
+	p, _ = payment(t, amounts...)
+	if _, e := PlanMaximum(p); e == nil {
+		t.Fatal("silently omitted sweep inputs beyond limit")
+	}
+	p, _ = payment(t, 1000000)
+	p.UTXOs[0].Raw = "00"
+	if _, e := PlanMaximum(p); e == nil {
+		t.Fatal("accepted malformed provenance")
+	}
+}

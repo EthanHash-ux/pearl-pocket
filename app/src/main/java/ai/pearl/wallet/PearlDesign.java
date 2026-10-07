@@ -23,9 +23,13 @@ import android.widget.TextView;
 
 /** Shared native visual primitives. No account, network or secret state. */
 final class PearlDesign {
-    static final int INK=Color.rgb(22,43,55), TEAL=Color.rgb(0,112,99), MUTED=Color.rgb(95,114,128),
+    static int INK=Color.rgb(22,43,55), TEAL=Color.rgb(0,112,99), MUTED=Color.rgb(95,114,128),
             BG=Color.rgb(245,247,249), LINE=Color.rgb(228,235,239), PALE=Color.rgb(227,244,238),
             MINT=Color.rgb(133,234,201), WHITE=Color.WHITE, RED=Color.rgb(174,61,68);
+    static void dark(boolean enabled){
+        INK=enabled?Color.rgb(229,236,242):Color.rgb(22,43,55);TEAL=enabled?Color.rgb(106,222,183):Color.rgb(0,112,99);MUTED=enabled?Color.rgb(155,174,187):Color.rgb(95,114,128);
+        BG=enabled?Color.rgb(13,22,30):Color.rgb(245,247,249);LINE=enabled?Color.rgb(46,63,75):Color.rgb(228,235,239);PALE=enabled?Color.rgb(33,62,60):Color.rgb(227,244,238);WHITE=enabled?Color.rgb(23,35,45):Color.WHITE;RED=enabled?Color.rgb(255,151,156):Color.rgb(174,61,68);
+    }
     static int dp(Context c,float n){return Math.round(n*c.getResources().getDisplayMetrics().density);}
     static GradientDrawable surface(Context c,int color,int stroke,int radius){
         GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(c,radius));if(stroke!=0)d.setStroke(dp(c,1),stroke);return d;
@@ -57,7 +61,7 @@ final class PearlDesign {
         }
     }
     static Drawable assetSurface(Context c){
-        GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{INK,Color.rgb(39,79,89)});d.setCornerRadius(dp(c,26));return d;
+        GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{Color.rgb(22,43,55),Color.rgb(39,79,89)});d.setCornerRadius(dp(c,26));return d;
     }
     static Drawable icon(Context c,String name,int color,int size){Icon icon=new Icon(name,color);icon.setBounds(0,0,dp(c,size),dp(c,size));return icon;}
     private static final class Icon extends Drawable {
