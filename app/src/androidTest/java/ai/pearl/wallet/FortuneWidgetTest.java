@@ -184,6 +184,9 @@ public class FortuneWidgetTest {
       tap(d, By.text("挖矿"));
       tap(d, By.text("PearlFortune 我的矿工"));
       tap(d, By.text("添加 PearlFortune 矿工"));
+      assertTrue(
+          "Wait for the miner form to be displayed",
+          d.wait(Until.hasObject(By.clazz("android.widget.EditText")), 10000));
       java.util.List<UiObject2> fields = d.findObjects(By.clazz("android.widget.EditText"));
       assertEquals(2, fields.size());
       fields.get(0).setText("公开测试矿工");
@@ -208,6 +211,7 @@ public class FortuneWidgetTest {
       assertNotNull(target);
       try {
         target.click();
+        device.waitForIdle();
         return;
       } catch (StaleObjectException redraw) {
         if (attempt == 2) throw redraw;
