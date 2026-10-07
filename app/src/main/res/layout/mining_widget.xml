@@ -14,7 +14,7 @@
     <TextView android:id="@+id/mw_mining_time" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#A7BDC6" android:textSize="11sp" android:maxLines="1" />
     <TextView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
-        <Button style="?android:attr/buttonBarButtonStyle" android:id="@+id/mw_refresh" android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp" android:text="@string/widget_refresh" android:textSize="12sp" android:textColor="#8FE9C5" android:background="@drawable/widget_button" />
-        <Button style="?android:attr/buttonBarButtonStyle" android:id="@+id/mw_config" android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp" android:text="@string/mining_widget_config" android:textSize="12sp" android:textColor="#C4D9DF" android:background="@drawable/widget_button" />
+        <Button style="?android:attr/buttonBarButtonStyle" android:layout_marginEnd="4dp" android:id="@+id/mw_refresh" android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp" android:text="@string/widget_refresh" android:textSize="12sp" android:textColor="#8FE9C5" android:background="@drawable/widget_button" />
+        <Button style="?android:attr/buttonBarButtonStyle" android:layout_marginStart="4dp" android:id="@+id/mw_config" android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp" android:text="@string/mining_widget_config" android:textSize="12sp" android:textColor="#C4D9DF" android:background="@drawable/widget_button" />
     </LinearLayout>
 </LinearLayout>
