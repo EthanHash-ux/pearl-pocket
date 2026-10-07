@@ -10,12 +10,11 @@ import sys
 import zipfile
 
 PROJECT = Path(__file__).resolve().parent.parent
-VERSION = '0.8.0'
+VERSION = re.search(r"versionName '([^']+)'", (PROJECT/'app/build.gradle').read_text()).group(1)
 TAG = 'v' + VERSION
 ASSETS = [f'pearl-wallet-android-{VERSION}.apk', 'pearl-wallet-android-source.zip',
           'SHA256SUMS', 'TEST_REPORT.md', 'verification.json',
-          'simnet-transfer.json', 'apk-signature.txt',
-          'ui-wallet.png', 'ui-market.png', 'ui-mining.png', 'ui-settings.png', 'ui-wallet-dark.png', 'ui-market-dark.png', 'ui-cross-chain.png', 'ui-fortune.png', 'ui-mining-widget.png']
+          'simnet-transfer.json', 'apk-signature.txt']
 
 
 def run(*args, check=True):

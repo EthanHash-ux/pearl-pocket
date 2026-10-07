@@ -20,7 +20,7 @@ import java.util.concurrent.Executors;
  * Device authentication is followed by a fresh wallet password for every signature/backup. */
 final class WalletFlow {
     static final int AUTH = 4108;
-    interface Host { void changed(); String address(); }
+    interface Host { void changed(); String address(); default String name() { return "手机钱包"; } }
     interface SecretAction { void run(byte[] entropy) throws Exception; }
     private final Activity activity;
     private final Host host;
@@ -28,6 +28,7 @@ final class WalletFlow {
     private final PendingTransfer pending;
     private final PearlApi api;
     private final PublicTools publicTools;
+    private final String slot;
     private String scanAddress="", scanAmount="";
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private AlertDialog dialog;
@@ -40,7 +41,10 @@ final class WalletFlow {
     private String recoveryAddress = "";
     private final android.os.Handler recoveryTimeout = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable expireRecovery = () -> { clearRecovery(); afterAuth = null; };
-    WalletFlow(Activity a, Host h, PearlApi api) { activity = a; host = h; this.api = api; vault = new WalletVault(a); pending = new PendingTransfer(a); publicTools=new PublicTools(a); }
+    WalletFlow(Activity a, Host h, PearlApi api) { this(a, h, api, WalletCatalog.LEGACY); }
+    WalletFlow(Activity a, Host h, PearlApi api, String slot) { activity = a; host = h; this.api = api; this.slot = WalletCatalog.validSlot(slot); vault = new WalletVault(a, slot); pending = new PendingTransfer(a, slot); publicTools=new PublicTools(a); }
+    boolean canLeave() { return !busy && !authWaiting; }
+    boolean awaitingAuth() { return authWaiting; }
     boolean exists() { return vault.exists(); }
     String address() throws Exception { return vault.exists() ? vault.metadata().getString("address") : ""; }
     String lastResult() { return lastResult; }
@@ -163,6 +167,7 @@ final class WalletFlow {
                     JSONObject identity = restore ? null : NativeCore.call(new JSONObject().put("action", "generate"));
                     if (!restore) entropy = WalletVault.decode(identity.getString("entropy"));
                     String address = restore ? importedAddress : identity.getString("address");
+                    new WalletCatalog(activity).checkNewAddress(slot, address);
                     synchronized (this) { if (!active || token != generation) return; vault.create(entropy, secret, address); }
                     if (restore) {
                         // The complete phrase was locally validated and the address explicitly confirmed.
@@ -300,7 +305,8 @@ final class WalletFlow {
     private void review(JSONObject quote,BridgeApi.MintPlan bridge) {
         try {
             JSONObject payment = quote.getJSONObject("payment");
-            String message = "收款地址\n" + payment.getString("to") + "\n\n金额  " + PearlAmount.format(new BigInteger(payment.getString("amount"))) + " PRL\n手续费  " + PearlAmount.format(new BigInteger(quote.getString("fee"))) + " PRL\n合计  " + PearlAmount.format(new BigInteger(payment.getString("amount")).add(new BigInteger(quote.getString("fee")))) + " PRL"+(payment.optBoolean("sweep",false)?"\n发送全部可用余额（已扣手续费），不生成找零。未确认与未成熟奖励不参与。":"")+"\n\n预览有效期 5 分钟。确认后在手机签名并提交到 Pearl 主网。";
+            if (!address().equals(payment.getString("from"))) throw new IllegalArgumentException("付款钱包与转账预览不一致，请重新操作");
+            String message = "付款钱包 · " + host.name() + "\n" + address() + "\n\n收款地址\n" + payment.getString("to") + "\n\n金额  " + PearlAmount.format(new BigInteger(payment.getString("amount"))) + " PRL\n手续费  " + PearlAmount.format(new BigInteger(quote.getString("fee"))) + " PRL\n合计  " + PearlAmount.format(new BigInteger(payment.getString("amount")).add(new BigInteger(quote.getString("fee")))) + " PRL"+(payment.optBoolean("sweep",false)?"\n发送全部可用余额（已扣手续费），不生成找零。未确认与未成熟奖励不参与。":"")+"\n\n预览有效期 5 分钟。确认后在手机签名并提交到 Pearl 主网。";
             if(bridge!=null)message += "\n\n"+bridge.summary()+"\n签名前再次核对桥报价。核对后 2 分钟内完成验证；桥状态仍可能随后变化。";
             final long[] bridgeCheckedAt={0};
             Runnable approve=()->unlock("确认并发送这笔转账", entropy -> {
@@ -342,7 +348,7 @@ final class WalletFlow {
             JSONObject signed = pending.load();
             if (signed == null) { notice("没有待提交交易", lastResult.isEmpty() ? "链上收发状态可在交易记录中查看。" : lastResult); return; }
             String id = signed.getString("txid");
-            show(new AlertDialog.Builder(activity).setTitle("结果待确认").setMessage("交易 ID\n" + id + "\n\n查询结果会先检查主网是否已接收。重发会使用同一笔签名交易。")
+            show(new AlertDialog.Builder(activity).setTitle("结果待确认").setMessage("付款钱包 · " + host.name() + "\n" + address() + "\n\n交易 ID\n" + id + "\n\n查询结果会先检查主网是否已接收。重发会使用同一笔签名交易。")
                     .setNegativeButton("关闭", null).setNeutralButton("重发同一交易", (d,w) -> {
                         int token = generation; busy = true; worker.execute(() -> submit(signed, token));
                     }).setPositiveButton("查询结果", (d,w) -> {

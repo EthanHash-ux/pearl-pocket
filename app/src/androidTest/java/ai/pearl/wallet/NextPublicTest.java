@@ -148,7 +148,6 @@ public class NextPublicTest {
         .grantRuntimePermission(c.getPackageName(), android.Manifest.permission.POST_NOTIFICATIONS);
     c.getSharedPreferences("public_preferences", 0)
         .edit()
-        .putString("receipt_signer", A)
         .putBoolean("receipt_notifications", true)
         .commit();
     c.getSharedPreferences("public_tools", 0)
@@ -156,6 +155,7 @@ public class NextPublicTest {
         .remove("receipt_states")
         .remove("watch_addresses")
         .commit();
+    new WatchBook(PublicStore.of(c)).save("Receipt test", A);
     NotificationManager manager = c.getSystemService(NotificationManager.class);
     manager.cancelAll();
     try {

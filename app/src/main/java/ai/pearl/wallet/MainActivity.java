@@ -68,6 +68,10 @@ public final class MainActivity extends Activity {
     };
     private SharedPreferences preferences;
     private WalletFlow walletFlow;
+    private WalletFlow provisioningFlow;
+    private WalletCatalog walletCatalog;
+    private WalletTools walletTools;
+    private String walletSlot = WalletCatalog.LEGACY, provisioningSlot = "", provisioningName = "", walletCatalogError = "";
     private PublicTools publicTools;
     private CrossChainTools crossChainTools;
     private FortuneTools fortuneTools; private MiningTools miningTools;private WatchTools watchTools;private HistoryTools historyTools;private String observedAddress="";
@@ -98,15 +102,17 @@ public final class MainActivity extends Activity {
         super.onCreate(state);
         preferences = getSharedPreferences("public_preferences", MODE_PRIVATE);
         publicTools=new PublicTools(this,()->price);miningTools=new MiningTools(this,()->hideBalances);fortuneTools=new FortuneTools(this);
-        historyTools=new HistoryTools(this,api,()->hideBalances);watchTools=new WatchTools(this,this::selectAddress,()->observedAddress);
+        walletCatalog = new WalletCatalog(this);
+        try { walletSlot = walletCatalog.active(); }
+        catch (Exception error) { walletCatalogError = "手机钱包列表无法读取，请保留助记词备份"; walletSlot = java.util.UUID.randomUUID().toString(); }
+        walletTools = new WalletTools(this, walletCatalog, this::selectWallet, this::createAdditionalWallet,
+                () -> walletSlot, () -> { render(); });
+        historyTools=new HistoryTools(this,api,()->hideBalances);watchTools=new WatchTools(this,this::selectAddress,()->observedAddress, this::showWallets);
         String savedWatch=preferences.getString("observed_address","");try{for(WatchBook.Entry e:new WatchBook(PublicStore.of(this)).list())if(e.address.equals(savedWatch))observedAddress=e.address;}catch(Exception ignored){observedAddress="";}
         hideBalances=preferences.getBoolean("hide_balances",false);
         if(state==null){if(getIntent().getBooleanExtra("show_market",false))page="market";if(getIntent().getBooleanExtra("show_receipts",false))page="activity";}else{page=state.getString("page","wallet");days=state.getInt("days",1);transactionFilter=state.getString("transaction_filter","all");}
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
-        walletFlow = new WalletFlow(this, new WalletFlow.Host() {
-            @Override public void changed() { loadWallet(); render(); refresh(); }
-            @Override public String address() { return address; }
-        }, api);
+        walletFlow = newWalletFlow(walletSlot);
         crossChainTools=new CrossChainTools(this,()->address,this::observing,()->hideBalances,plan->{if(observing())walletFlow.notice("观察地址不能发送","请先切换到手机钱包。");else walletFlow.bridge(plan);});
         loadWallet();if(state==null)selectReceiptAddress(getIntent());
         readPriceCache();
@@ -190,7 +196,7 @@ public final class MainActivity extends Activity {
         ImageView logo=new ImageView(this);logo.setImageResource(R.drawable.ic_pearl_mark);logo.setPadding(dp(8),dp(8),dp(8),dp(8));logo.setBackground(background(Color.rgb(22,43,55),0,14));header.addView(logo,new LinearLayout.LayoutParams(dp(44),dp(44)));
         LinearLayout branding=column();branding.setPadding(dp(12),0,0,0);branding.addView(text("掌珠钱包",21,INK,true));TextView wordmark=text("PEARL POCKET",11,MUTED,true);wordmark.setLetterSpacing(.13f);gap(branding,4);branding.addView(wordmark);weighted(header,branding);
         header.addView(iconButton("refresh","刷新行情和链上数据",INK,WHITE,this::refresh),new LinearLayout.LayoutParams(dp(44),dp(44)));content.addView(header);gap(content,18);
-        LinearLayout info=row();networkText=text("Pearl 主网 · 连接中",11,GREEN,true);weighted(info,networkText);TextView mode=text(observing()?"只读观察":address.isEmpty()?"手机独立钱包":"密钥已锁定",11,MUTED,false);mode.append(" ▾");mode.setContentDescription("切换钱包或观察地址");mode.setPadding(dp(8),dp(8),0,dp(8));mode.setOnClickListener(v->watchTools.show());info.addView(mode);content.addView(info);gap(content,20);
+        LinearLayout info=row();networkText=text("Pearl 主网 · 连接中",11,GREEN,true);weighted(info,networkText);TextView mode=text(observing()?"只读观察":address.isEmpty()?"手机独立钱包":walletCatalog.name(walletSlot),11,MUTED,false);mode.setMaxWidth(dp(170));mode.setSingleLine(true);mode.setEllipsize(android.text.TextUtils.TruncateAt.END);mode.append(" ▾");mode.setContentDescription("切换钱包或观察地址");mode.setPadding(dp(8),dp(8),0,dp(8));mode.setOnClickListener(v->watchTools.show());info.addView(mode);content.addView(info);gap(content,20);
         }else networkText=null;
         switch (page) {
             case "market": renderMarket(); break;
@@ -284,10 +290,11 @@ public final class MainActivity extends Activity {
         LinearLayout settings=card(WHITE);settings.addView(text("计价货币",15,INK,true));gap(settings,14);segments(settings,new String[]{"USDT","USD 美元","CNY 人民币"},new String[]{"usdt","usd","cny"},currency,this::changeCurrency);content.addView(settings);gap(content,16);content.addView(button(darkMode?"切换为浅色模式":"切换为深色模式",GREEN,PALE,v->{preferences.edit().putBoolean("dark_mode",!darkMode).apply();recreate();}));gap(content,16);
         LinearLayout privacy=card(WHITE);LinearLayout line=row();LinearLayout words=column();words.addView(text("隐藏资产金额",15,INK,true));gap(words,6);words.addView(text("钱包与记录页隐藏余额和交易金额",12,MUTED,false));weighted(line,words);android.widget.Switch toggle=new android.widget.Switch(this);toggle.setContentDescription("隐藏资产金额");toggle.setChecked(hideBalances);toggle.setThumbTintList(android.content.res.ColorStateList.valueOf(WHITE));toggle.setTrackTintList(new android.content.res.ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{GREEN,Color.rgb(142,162,174)}));toggle.setOnCheckedChangeListener((b,checked)->{hideBalances=checked;preferences.edit().putBoolean("hide_balances",checked).apply();});line.addView(toggle);privacy.addView(line);gap(privacy,10);privacy.addView(text("转账确认仍显示实际金额，便于准确核对。",11,MUTED,false));content.addView(privacy);gap(content,16);
         LinearLayout wallet=card(WHITE);wallet.addView(text("手机钱包安全",16,INK,true));gap(wallet,8);wallet.addView(text(address.isEmpty()?"在本机创建钱包，私钥加密保存。":"查看备份与每次签名，都需要手机验证和钱包密码。",13,MUTED,false));gap(wallet,15);
+        wallet.addView(button("管理手机钱包",GREEN,PALE,v->showWallets()));gap(wallet,8);
         if(address.isEmpty()){wallet.addView(button("创建手机钱包",WHITE,GREEN,v->walletFlow.setup(false)));gap(wallet,8);wallet.addView(button("恢复已有手机钱包",GREEN,PALE,v->walletFlow.setup(true)));}
         else{wallet.addView(button(walletFlow.backedUp()?"查看离线备份":"完成助记词备份",GREEN,PALE,v->walletFlow.backup()));gap(wallet,8);wallet.addView(button("查询或重发待确认交易",INK,BG,v->walletFlow.pendingStatus()));gap(wallet,8);wallet.addView(button("钱包恢复兼容性",MUTED,WHITE,v->walletFlow.notice("钱包恢复兼容性","支持本应用 BIP39 英文 12 / 15 / 18 / 21 / 24 词，BIP39 附加口令为空。使用 Pearl 主网 Taproot 地址，固定收款与找零地址。尚不支持 Oyster XMSS 全钱包恢复。")));}
         content.addView(wallet);gap(content,16);LinearLayout tools=card(WHITE);tools.addView(text("日常工具",16,INK,true));gap(tools,12);tools.addView(button("桌面价格小组件",GREEN,BG,v->PriceWidget.pin(this)));gap(tools,8);tools.addView(button("算力与价格小组件",GREEN,BG,v->fortuneTools.list()));gap(tools,8);tools.addView(button(preferences.getBoolean("receipt_notifications",false)?"关闭收款通知":"启用收款通知",GREEN,BG,v->receiptSettings()));gap(tools,8);tools.addView(button("观察地址管理",GREEN,BG,v->watchTools.show()));gap(tools,8);tools.addView(button("完整交易历史",GREEN,BG,v->historyTools.show(viewAddress())));gap(tools,8);tools.addView(button("地址簿",GREEN,BG,v->publicTools.addressBook(null)));gap(tools,8);tools.addView(button("价格提醒",GREEN,BG,v->publicTools.priceAlerts()));content.addView(tools);gap(content,16);
-        LinearLayout sources=card(WHITE);sources.addView(text("关于掌珠钱包",16,INK,true));gap(sources,8);sources.addView(text("Pearl Pocket · 0.7.0\nPearl Mainnet · 手机独立钱包",13,MUTED,false));gap(sources,14);sources.addView(button("数据来源",INK,BG,v->walletFlow.notice("数据来源","链上：Pearl 官方 Blockbook\n行情：BigONE PRL/USDT 实时推送\n汇率 / 备用参考：CoinGecko\n矿池：HeroMiners 公开统计\n跨链：社区 PearlBridge 公共 API\n永续：Lighter PRL 市场 4097\nEthereum：Publicnode 固定只读 RPC / Uniswap V3 报价")));gap(sources,8);sources.addView(button("查看掌珠钱包源码",GREEN,WHITE,v->open("https://github.com/EthanHash-ux/pearl-pocket")));content.addView(sources);
+        LinearLayout sources=card(WHITE);sources.addView(text("关于掌珠钱包",16,INK,true));gap(sources,8);sources.addView(text("Pearl Pocket · "+appVersion()+"\nPearl Mainnet · 手机独立钱包",13,MUTED,false));gap(sources,14);sources.addView(button("数据来源",INK,BG,v->walletFlow.notice("数据来源","链上：Pearl 官方 Blockbook\n行情：BigONE PRL/USDT 实时推送\n汇率 / 备用参考：CoinGecko\n矿池：HeroMiners 公开统计\n跨链：社区 PearlBridge 公共 API\n永续：Lighter PRL 市场 4097\nEthereum：Publicnode 固定只读 RPC / Uniswap V3 报价")));gap(sources,8);sources.addView(button("查看掌珠钱包源码",GREEN,WHITE,v->open("https://github.com/EthanHash-ux/pearl-pocket")));content.addView(sources);
     }
 
     private void transactionDetail(PearlApi.Transaction tx){
@@ -434,11 +441,85 @@ public final class MainActivity extends Activity {
     private String message(Exception e) { return e instanceof IllegalArgumentException || e instanceof java.io.IOException ? e.getMessage() : "数据格式不兼容，请稍后重试"; }
     private String time(long seconds) { return seconds <= 0 ? "待确认" : new SimpleDateFormat("MM/dd HH:mm", Locale.CHINA).format(new Date(seconds * 1000)); }
 
+    private String appVersion() {
+        try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
+        catch (android.content.pm.PackageManager.NameNotFoundException error) { return ""; }
+    }
+
+    private WalletFlow newWalletFlow(String slot) {
+        return new WalletFlow(this, new WalletFlow.Host() {
+            @Override public void changed() {
+                try {
+                    if (slot.equals(provisioningSlot) && provisioningFlow != null && provisioningFlow.exists()) {
+                        walletCatalog.rename(slot, provisioningName);
+                        walletCatalog.select(slot);
+                        WalletFlow previous = walletFlow;
+                        walletFlow = provisioningFlow; provisioningFlow = null; provisioningSlot = ""; provisioningName = "";
+                        walletSlot = slot; previous.close(); clearObservedAddress(); resetWalletView();
+                    }
+                    if (!slot.equals(walletSlot)) return;
+                    loadWallet(); render(); refresh();
+                } catch (Exception error) { walletFlow.notice("钱包已保存", "钱包文件已保留，可从手机钱包列表选择。\n" + message(error)); }
+            }
+            @Override public String address() {
+                try { return new WalletVault(MainActivity.this, slot).metadata().getString("address"); }
+                catch (Exception error) { return ""; }
+            }
+            @Override public String name() { return walletCatalog.name(slot); }
+        }, api, slot);
+    }
+
+    private boolean canChangeWallet() {
+        if (!walletFlow.canLeave() || (provisioningFlow != null && !provisioningFlow.canLeave())) {
+            walletFlow.notice("正在处理钱包操作", "请先完成当前验证或交易，再切换钱包。"); return false;
+        }
+        return true;
+    }
+
+    private void showWallets() { if (canChangeWallet()) walletTools.show(); }
+
+    private void clearObservedAddress() {
+        observedAddress = ""; preferences.edit().putString("observed_address", "").apply();
+    }
+
+    private void resetWalletView() {
+        if (receiveDialog != null) { receiveDialog.dismiss(); receiveDialog = null; }
+        publicTools.pause(); crossChainTools.pause(); watchTools.pause(); historyTools.pause();
+        account = null; accountGeneration++; loadingAccount = false; accountError = "";
+        accountUpdatedAt = 0; page = "wallet"; scrollPositions.clear();
+    }
+
+    private boolean selectWallet(String slot) {
+        if (!canChangeWallet()) return false;
+        try {
+            walletCatalog.select(slot);
+            if (provisioningFlow != null) { provisioningFlow.close(); provisioningFlow = null; provisioningSlot = ""; }
+            walletFlow.close(); walletSlot = slot; walletFlow = newWalletFlow(slot);
+            if (foreground) walletFlow.resume();
+            clearObservedAddress(); resetWalletView(); loadWallet(); render(); refresh();
+            return true;
+        } catch (Exception error) { walletFlow.notice("无法切换钱包", message(error)); return false; }
+    }
+
+    private void createAdditionalWallet(boolean restore) {
+        if (!canChangeWallet()) return;
+        try {
+            if (provisioningFlow != null) provisioningFlow.close();
+            provisioningFlow = null; provisioningSlot = "";
+            if (walletCatalog.list().isEmpty() && !walletFlow.exists()) { walletFlow.setup(restore); return; }
+            provisioningName = "钱包 " + (walletCatalog.list().size() + 1);
+            provisioningSlot = walletCatalog.newSlot(); provisioningFlow = newWalletFlow(provisioningSlot);
+            if (foreground) provisioningFlow.resume();
+            provisioningFlow.setup(restore);
+        } catch (Exception error) { walletFlow.notice("无法添加钱包", message(error)); }
+    }
+
     private void loadWallet() {
         try {
+            if (!walletCatalogError.isEmpty()) throw new java.io.IOException(walletCatalogError);
             String next = walletFlow.address();
             if (!next.equals(address)) { address = next;preferences.edit().putString("receipt_signer",address).apply();ReceiptNotifications.schedule(this);account = null; accountGeneration++; loadingAccount = false; }
-        } catch (Exception e) { accountError = "钱包文件无法读取，请使用离线备份恢复"; }
+        } catch (Exception e) { address = ""; account = null; accountGeneration++; loadingAccount = false; accountError = "钱包文件无法读取，请使用离线备份恢复"; }
     }
 
     private void receive() {
@@ -481,10 +562,10 @@ public final class MainActivity extends Activity {
     }
     private void copy(String title,String value){((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText(title,value));Toast.makeText(this,"已复制",Toast.LENGTH_SHORT).show();}
 
-    @Override protected void onActivityResult(int request, int result, Intent data) { super.onActivityResult(request, result, data); if (request == WalletFlow.AUTH) walletFlow.authResult(result); if(request==QrScannerActivity.REQUEST)walletFlow.scanResult(result,data); }
-    private void selectReceiptAddress(Intent intent){String selected=intent.getStringExtra("receipt_address");if(selected==null)return;try{selected=PearlAddress.normalize(selected);if(selected.equals(address))observedAddress="";else for(WatchBook.Entry e:new WatchBook(PublicStore.of(this)).list())if(e.address.equals(selected))observedAddress=e.address;preferences.edit().putString("observed_address",observedAddress).apply();}catch(Exception ignored){}}
+    @Override protected void onActivityResult(int request, int result, Intent data) { super.onActivityResult(request, result, data); if (request == WalletFlow.AUTH) { if (provisioningFlow != null && provisioningFlow.awaitingAuth()) provisioningFlow.authResult(result); else walletFlow.authResult(result); } if(request==QrScannerActivity.REQUEST)walletFlow.scanResult(result,data); }
+    private void selectReceiptAddress(Intent intent){String selected=intent.getStringExtra("receipt_address");if(selected==null)return;try{selected=PearlAddress.normalize(selected);for(WalletCatalog.Entry entry:walletCatalog.list())if(entry.readable&&entry.address.equals(selected)){if(!entry.slot.equals(walletSlot)){if(foreground){if(!selectWallet(entry.slot))return;}else{walletCatalog.select(entry.slot);walletFlow.close();walletSlot=entry.slot;walletFlow=newWalletFlow(walletSlot);loadWallet();}}clearObservedAddress();return;}for(WatchBook.Entry e:new WatchBook(PublicStore.of(this)).list())if(e.address.equals(selected))observedAddress=e.address;preferences.edit().putString("observed_address",observedAddress).apply();}catch(Exception ignored){}}
     private void receiptSettings(){if(preferences.getBoolean("receipt_notifications",false)){preferences.edit().putBoolean("receipt_notifications",false).apply();ReceiptNotifications.schedule(this);render();return;}
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("启用收款通知？").setMessage("检查手机钱包和已添加的观察地址。后台约每 15 分钟检查最新记录，系统可能延迟；短时间大量交易可能漏检，完整结果请查看历史。首次检查建立基线，不补发历史通知。地址会发送给 Pearl 官方 Blockbook，后台不读取私钥。待确认与首次链上确认分别提醒；确认数可能因链重组改变。").setNegativeButton("取消",null).setPositiveButton("启用",(x,w)->{preferences.edit().putBoolean("receipt_notifications",true).apply();if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},4212);else ReceiptNotifications.schedule(this);render();}).create();d.show();PearlDesign.dialog(d);
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("启用收款通知？").setMessage("检查本机所有手机钱包和已添加的观察地址。后台约每 15 分钟检查最新记录，系统可能延迟；短时间大量交易可能漏检，完整结果请查看历史。首次检查建立基线，不补发历史通知。地址会发送给 Pearl 官方 Blockbook，后台不读取私钥。待确认与首次链上确认分别提醒；确认数可能因链重组改变。").setNegativeButton("取消",null).setPositiveButton("启用",(x,w)->{preferences.edit().putBoolean("receipt_notifications",true).apply();if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},4212);else ReceiptNotifications.schedule(this);render();}).create();d.show();PearlDesign.dialog(d);
     }
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){super.onRequestPermissionsResult(request,permissions,results);if(request==4212){ReceiptNotifications.schedule(this);render();}if(request==PublicTools.NOTIFICATIONS){AlertNotifications.schedule(this);handler.post(()->{if(foreground)publicTools.priceAlerts();});}}
     private void openMiningWidget(Intent intent) {
@@ -498,7 +579,7 @@ public final class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);openMiningWidget(intent);if(intent.getBooleanExtra("show_market",false)){page="market";render();}if(intent.getBooleanExtra("show_receipts",false)){selectReceiptAddress(intent);account=null;accountGeneration++;loadingAccount=false;page="activity";render();refreshAccount();}}
     private void open(String url) { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
     @Override protected void onSaveInstanceState(Bundle state){state.putString("page",page);state.putInt("days",days);state.putString("transaction_filter",transactionFilter);super.onSaveInstanceState(state);}
-    @Override public void onResume() { super.onResume(); foreground = true; AlertNotifications.schedule(this);ReceiptNotifications.schedule(this);if (marketFeed != null) marketFeed.start(); handler.removeCallbacks(priceClock); handler.post(priceClock); handler.removeCallbacks(chartPoll); handler.postDelayed(chartPoll, 60_000); if (walletFlow != null) { walletFlow.resume(); loadWallet(); render(); } handler.removeCallbacks(poll); handler.postDelayed(poll, 90_000); updateLabels(); }
-    @Override public void onPause() { foreground = false; if(receiveDialog!=null){receiveDialog.dismiss();receiveDialog=null;}if(publicTools!=null)publicTools.pause();if(crossChainTools!=null)crossChainTools.pause();if(watchTools!=null)watchTools.pause();if(miningTools!=null)miningTools.pause();if(fortuneTools!=null)fortuneTools.pause();if(historyTools!=null)historyTools.pause();if (marketFeed != null) marketFeed.stop(); handler.removeCallbacks(priceClock); handler.removeCallbacks(chartPoll); if (walletFlow != null) walletFlow.pause(); handler.removeCallbacks(poll); super.onPause(); }
-    @Override public void onDestroy() { if (marketFeed != null) marketFeed.close(); handler.removeCallbacks(priceClock); handler.removeCallbacks(chartPoll); if (walletFlow != null) walletFlow.close(); handler.removeCallbacks(poll); accountGeneration++; chartGeneration++;if(historyTools!=null)historyTools.close();if(miningTools!=null)miningTools.close();if(fortuneTools!=null)fortuneTools.close();if(crossChainTools!=null)crossChainTools.close();executor.shutdownNow(); super.onDestroy(); }
+    @Override public void onResume() { super.onResume(); foreground = true; AlertNotifications.schedule(this);ReceiptNotifications.schedule(this);if (marketFeed != null) marketFeed.start(); handler.removeCallbacks(priceClock); handler.post(priceClock); handler.removeCallbacks(chartPoll); handler.postDelayed(chartPoll, 60_000); if (walletFlow != null) { walletFlow.resume(); if (provisioningFlow != null) provisioningFlow.resume(); loadWallet(); render(); } handler.removeCallbacks(poll); handler.postDelayed(poll, 90_000); updateLabels(); }
+    @Override public void onPause() { foreground = false; if(receiveDialog!=null){receiveDialog.dismiss();receiveDialog=null;}if(publicTools!=null)publicTools.pause();if(crossChainTools!=null)crossChainTools.pause();if(watchTools!=null)watchTools.pause();if(walletTools!=null)walletTools.pause();if(miningTools!=null)miningTools.pause();if(fortuneTools!=null)fortuneTools.pause();if(historyTools!=null)historyTools.pause();if (marketFeed != null) marketFeed.stop(); handler.removeCallbacks(priceClock); handler.removeCallbacks(chartPoll); if (walletFlow != null) walletFlow.pause(); if (provisioningFlow != null) provisioningFlow.pause(); handler.removeCallbacks(poll); super.onPause(); }
+    @Override public void onDestroy() { if (marketFeed != null) marketFeed.close(); handler.removeCallbacks(priceClock); handler.removeCallbacks(chartPoll); if (walletFlow != null) walletFlow.close(); if (provisioningFlow != null) provisioningFlow.close(); handler.removeCallbacks(poll); accountGeneration++; chartGeneration++;if(historyTools!=null)historyTools.close();if(miningTools!=null)miningTools.close();if(fortuneTools!=null)fortuneTools.close();if(crossChainTools!=null)crossChainTools.close();executor.shutdownNow(); super.onDestroy(); }
 }

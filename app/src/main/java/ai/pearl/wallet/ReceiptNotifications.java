@@ -11,10 +11,9 @@ final class ReceiptNotifications {
   private static final String CHANNEL = "pearl_receipts";
 
   static List<String> addresses(Context c) throws Exception {
-    android.content.SharedPreferences p = c.getSharedPreferences("public_preferences", 0);
     List<String> result = new ArrayList<>();
-    String a = p.getString("receipt_signer", "");
-    if (!a.isEmpty()) result.add(PearlAddress.normalize(a));
+    for (WalletCatalog.Entry entry : new WalletCatalog(c).list())
+      if (entry.readable && !result.contains(entry.address)) result.add(entry.address);
     for (WatchBook.Entry e : new WatchBook(PublicStore.of(c)).list())
       if (!result.contains(e.address)) result.add(e.address);
     return result;

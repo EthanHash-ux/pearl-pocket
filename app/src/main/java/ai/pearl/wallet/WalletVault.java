@@ -27,20 +27,25 @@ import javax.crypto.spec.SecretKeySpec;
 final class WalletVault {
     static final int ITERATIONS = 600_000;
     private final AtomicFile file;
-    WalletVault(Context context) { file = new AtomicFile(new File(context.getNoBackupFilesDir(), "wallet-v1.json")); }
-    boolean exists() { return file.getBaseFile().exists(); }
+    private final String slot;
+    WalletVault(Context context) { this(context, WalletCatalog.LEGACY); }
+    WalletVault(Context context, String slot) { this.slot = WalletCatalog.validSlot(slot); file = new AtomicFile(new File(WalletCatalog.directory(context, slot), "wallet-v1.json")); }
+    boolean exists() { return file.getBaseFile().exists() || new File(file.getBaseFile() + ".bak").exists(); }
     synchronized JSONObject metadata() throws Exception {
         byte[] bytes = file.readFully();
         if (bytes.length > 16_384) throw new IllegalArgumentException("钱包文件无效");
         JSONObject json = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
         if (json.getInt("version") != 1 || !"m/86'/808276'/0'/0/0".equals(json.getString("path"))) throw new IllegalArgumentException("钱包版本不兼容");
+        WalletCatalog.validSlot(json.getString("id"));
+        if (!slot.equals(json.optString("walletSlot", WalletCatalog.LEGACY))) throw new IllegalArgumentException("钱包文件与所选钱包不匹配");
         PearlAddress.normalize(json.getString("address")); return json;
     }
     static byte[] random(int size) { byte[] result = new byte[size]; new SecureRandom().nextBytes(result); return result; }
     static String b64(byte[] b) { return Base64.encodeToString(b, Base64.NO_WRAP); }
     static byte[] decode(String s) { return Base64.decode(s, Base64.NO_WRAP); }
     static byte[] aad(JSONObject m) throws Exception {
-        return (m.getInt("version") + "|" + m.getString("id") + "|" + m.getString("address") + "|" + m.getString("path")).getBytes(StandardCharsets.UTF_8);
+        return (m.getInt("version") + "|" + m.getString("id") + "|" + m.getString("address") + "|" + m.getString("path")
+                + (m.has("walletSlot") ? "|" + m.getString("walletSlot") : "")).getBytes(StandardCharsets.UTF_8);
     }
     static byte[] passwordKey(char[] password, byte[] salt) throws Exception {
         PBEKeySpec spec = new PBEKeySpec(password, salt, ITERATIONS, 256);
@@ -69,9 +74,10 @@ final class WalletVault {
         generator.init(builder.build()); return generator.generateKey();
     }
     synchronized void create(byte[] entropy, char[] password, String address) throws Exception {
-        if (exists()) throw new IllegalArgumentException("手机已经保存了一个钱包");
+        if (exists()) throw new IllegalArgumentException("这个钱包已经保存");
         if (password.length < 10) throw new IllegalArgumentException("钱包密码至少需要 10 个字符");
         JSONObject m = new JSONObject().put("version", 1).put("id", UUID.randomUUID().toString()).put("address", PearlAddress.normalize(address)).put("path", "m/86'/808276'/0'/0/0");
+        if (!WalletCatalog.LEGACY.equals(slot)) m.put("walletSlot", slot);
         byte[] salt = random(32), innerIv = random(12), derived = null, inner = null;
         boolean saved = false;
         try {

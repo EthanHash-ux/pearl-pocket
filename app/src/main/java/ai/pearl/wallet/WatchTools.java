@@ -12,13 +12,19 @@ final class WatchTools {
   private final WatchBook book;
   private final Consumer<String> selected;
   private final Supplier<String> current;
+  private final Runnable wallets;
   private AlertDialog dialog;
 
   WatchTools(Activity a, Consumer<String> selected, Supplier<String> current) {
+    this(a, selected, current, null);
+  }
+
+  WatchTools(Activity a, Consumer<String> selected, Supplier<String> current, Runnable wallets) {
     activity = a;
     book = new WatchBook(PublicStore.of(a));
     this.selected = selected;
     this.current = current;
+    this.wallets = wallets;
   }
 
   private Button button(String label, Runnable r) {
@@ -29,6 +35,7 @@ final class WatchTools {
     try {
       pause();
       LinearLayout form = PearlDesign.form(activity);
+      if (wallets != null) form.addView(button("管理手机钱包", () -> { pause(); wallets.run(); }));
       form.addView(PearlDesign.note(activity, "观察地址只查询公开余额和交易，不导入私钥，不能发送资金。查询服务会看到你选择的地址。"));
       form.addView(
           button(

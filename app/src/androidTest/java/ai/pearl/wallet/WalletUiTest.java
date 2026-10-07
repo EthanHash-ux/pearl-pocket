@@ -44,12 +44,21 @@ public class WalletUiTest {
     private void fresh()throws Exception{
         assertEquals("1",device().executeShellCommand("getprop ro.kernel.qemu").trim());
         device().pressHome();Thread.sleep(400);
-        File wallet=new File(context().getNoBackupFilesDir(),"wallet-v1.json");
-        if(wallet.exists()) {JSONObject meta=new JSONObject(new String(Files.readAllBytes(wallet.toPath()),java.nio.charset.StandardCharsets.UTF_8));KeyStore keys=KeyStore.getInstance("AndroidKeyStore");keys.load(null);keys.deleteEntry("pearl-wallet-"+meta.getString("id"));assertTrue(wallet.delete());}
+        File privateDir=context().getNoBackupFilesDir();
+        removeTestVault(new File(privateDir,"wallet-v1.json"));
+        File[] slots=new File(privateDir,"wallets").listFiles();
+        if(slots!=null)for(File slot:slots)removeTestVault(new File(slot,"wallet-v1.json"));
+        new android.util.AtomicFile(new File(privateDir,"wallet-catalog.json")).delete();
+        new android.util.AtomicFile(new File(privateDir,"pending-transfer.json")).delete();
         context().getSharedPreferences("public_preferences",Context.MODE_PRIVATE).edit().remove("observed_address").remove("dark_mode").remove("receipt_notifications").commit();
         context().getSharedPreferences("backup_status",Context.MODE_PRIVATE).edit().clear().commit();
         Intent intent=new Intent(context(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK);context().startActivity(intent);
         text("恢复已有手机钱包");
+    }
+    private void removeTestVault(File wallet)throws Exception{
+        android.util.AtomicFile file=new android.util.AtomicFile(wallet);
+        if(wallet.exists()||new File(wallet+".bak").exists()) {JSONObject meta=new JSONObject(new String(file.readFully(),java.nio.charset.StandardCharsets.UTF_8));KeyStore keys=KeyStore.getInstance("AndroidKeyStore");keys.load(null);keys.deleteEntry("pearl-wallet-"+meta.getString("id"));file.delete();}
+        new android.util.AtomicFile(new File(wallet.getParentFile(),"pending-transfer.json")).delete();
     }
     private List<String> backup(){
         text("离线助记词备份");List<String> result=new ArrayList<>();
@@ -79,6 +88,35 @@ public class WalletUiTest {
         String phrase="abandon ".repeat(11)+"about";recover(phrase,"prl1pr6yuq8u2r95wjzzgpdy8cpnncpl7l8zgy6x5q0367pnc53s2famqg7pt74",true);
         tap("⌁\n行情");assertTrue("Live exchange price did not appear",device().wait(Until.hasObject(By.textContains("BigONE ·")),40_000));assertTrue(device().hasObject(By.textContains("接收 ")));tap("7 天");
         tap("⚙\n设置");tap("USDT");tap("⌁\n行情");assertTrue(device().wait(Until.hasObject(By.text(Pattern.compile("[0-9.]+ USDT"))),10_000));
+    }
+    @Test public void multipleWalletCreateImportSwitchRenameAndDuplicateRecovery()throws Exception{
+        fresh();String original="prl1pr6yuq8u2r95wjzzgpdy8cpnncpl7l8zgy6x5q0367pnc53s2famqg7pt74";
+        recover("abandon ".repeat(11)+"about",original,false);
+        walletManager();scrollTo("创建另一个钱包");tap("创建另一个钱包");authenticate();text("创建手机钱包");passwords();tap("继续");
+        List<String> words=backup();assertEquals(24,words.size());words.clear();tap("稍后备份");
+        String generated=receive();assertNotEquals(original,generated);assertEquals(2,new WalletCatalog(context()).list().size());
+        walletManager();tap("重命名 钱包 2");device().wait(Until.findObject(By.desc("钱包名称")),10000).setText("储蓄");hideKeyboard();tap("保存名称");text("储蓄 · 当前钱包\n"+generated);tap("使用 储蓄");
+        tap("发送");text("先完成离线备份");tap("知道了");
+        walletManager();tap("使用 我的钱包");assertEquals(original,receive());
+        walletManager();scrollTo("导入另一个钱包");tap("导入另一个钱包");completeAdditionalRecovery("abandon ".repeat(17)+"agent",NativeCore.address(new byte[24]),false);
+        String imported=receive();assertNotEquals(generated,imported);assertNotEquals(original,imported);
+        WalletCatalog catalog=new WalletCatalog(context());assertEquals(3,catalog.list().size());String savedSlot=catalog.active();
+        walletManager();scrollTo("导入另一个钱包");tap("导入另一个钱包");completeAdditionalRecovery("abandon ".repeat(11)+"about",original,true);
+        assertEquals(3,catalog.list().size());assertEquals(savedSlot,catalog.active());assertEquals(imported,receive());
+        // Cancel creation without replacing the selected vault or its address.
+        walletManager();scrollTo("创建另一个钱包");tap("创建另一个钱包");authenticate();text("创建手机钱包");tap("取消");
+        assertEquals(savedSlot,catalog.active());assertEquals(imported,receive());
+        device().pressHome();context().startActivity(new Intent(context(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));
+        assertEquals(imported,receive());
+        assertEquals("All owned addresses must be monitored",3,ReceiptNotifications.addresses(context()).stream().filter(a->catalogAddress(a)).count());
+        walletManager();tap("使用 我的钱包");assertEquals(original,receive());
+    }
+    private boolean catalogAddress(String address){try{for(WalletCatalog.Entry entry:new WalletCatalog(context()).list())if(entry.address.equals(address))return true;return false;}catch(Exception e){throw new AssertionError(e);}}
+    private void walletManager(){UiObject2 chooser=device().wait(Until.findObject(By.desc("切换钱包或观察地址")),10000);assertNotNull(chooser);chooser.click();tap("管理手机钱包");text("管理手机钱包");}
+    private void completeAdditionalRecovery(String phrase,String expected,boolean duplicate)throws Exception{
+        text("恢复手机钱包");device().findObject(By.desc("第 1 个助记词")).setText(phrase);hideKeyboard();tap("校验并继续");text("确认恢复的钱包");assertTrue(device().hasObject(By.text(expected)));tap("设置钱包密码");authenticate();text("设置恢复钱包的密码");passwords();tap("恢复钱包");
+        if(duplicate){text("保存失败");assertTrue(device().hasObject(By.textContains("这个钱包已在本机保存")));}else text("钱包已恢复");
+        tap("知道了");
     }
     @Test public void actualWebSocketStopsInBackgroundAndStartsWithNewSnapshot()throws Exception{
         AtomicInteger received=new AtomicInteger();java.util.concurrent.atomic.AtomicBoolean secondSession=new java.util.concurrent.atomic.AtomicBoolean();CountDownLatch first=new CountDownLatch(1),resumed=new CountDownLatch(1);
