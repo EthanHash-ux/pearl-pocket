@@ -219,6 +219,6 @@ public class DesignCaptureTest {
     activity.startActivity(
         new Intent(activity, MainActivity.class)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
-    assertTrue(device.wait(Until.hasObject(By.text("掌珠钱包")), 10000));
+    assertTrue(device.wait(Until.hasObject(By.text("矿业工作台")), 10000));
   }
 }

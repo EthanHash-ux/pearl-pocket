@@ -166,6 +166,7 @@ public class FortuneWidgetTest {
     Activity a = i.waitForMonitorWithTimeout(monitor, 15000);
     i.removeMonitor(monitor);
     assertNotNull(a);
+    i.waitForIdleSync();
     return a;
   }
 
@@ -180,11 +181,9 @@ public class FortuneWidgetTest {
     book.remove(ADDRESS);
     Activity main = launch(i, c);
     try {
-      UiObject2 mining = d.wait(Until.findObject(By.text("挖矿")), 10000);
-      assertNotNull(mining);
-      mining.click();
-      d.wait(Until.findObject(By.text("PearlFortune 我的矿工")), 10000).click();
-      d.wait(Until.findObject(By.text("添加 PearlFortune 矿工")), 10000).click();
+      tap(d, By.text("挖矿"));
+      tap(d, By.text("PearlFortune 我的矿工"));
+      tap(d, By.text("添加 PearlFortune 矿工"));
       java.util.List<UiObject2> fields = d.findObjects(By.clazz("android.widget.EditText"));
       assertEquals(2, fields.size());
       fields.get(0).setText("公开测试矿工");
@@ -199,6 +198,20 @@ public class FortuneWidgetTest {
     } finally {
       book.remove(ADDRESS);
       i.runOnMainSync(main::finish);
+    }
+  }
+
+  private void tap(UiDevice device, BySelector selector) {
+    for (int attempt = 0; attempt < 3; attempt++) {
+      device.waitForIdle();
+      UiObject2 target = device.wait(Until.findObject(selector), 10000);
+      assertNotNull(target);
+      try {
+        target.click();
+        return;
+      } catch (StaleObjectException redraw) {
+        if (attempt == 2) throw redraw;
+      }
     }
   }
 }
