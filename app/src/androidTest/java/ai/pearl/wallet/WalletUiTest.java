@@ -59,6 +59,8 @@ public class WalletUiTest {
         android.util.AtomicFile file=new android.util.AtomicFile(wallet);
         if(wallet.exists()||new File(wallet+".bak").exists()) {JSONObject meta=new JSONObject(new String(file.readFully(),java.nio.charset.StandardCharsets.UTF_8));KeyStore keys=KeyStore.getInstance("AndroidKeyStore");keys.load(null);keys.deleteEntry("pearl-wallet-"+meta.getString("id"));file.delete();}
         new android.util.AtomicFile(new File(wallet.getParentFile(),"pending-transfer.json")).delete();
+        new android.util.AtomicFile(new File(wallet.getParentFile(),"pending-ethereum.json")).delete();
+        new android.util.AtomicFile(new File(wallet.getParentFile(),"ethereum-address.json")).delete();
     }
     private List<String> backup(){
         text("离线助记词备份");List<String> result=new ArrayList<>();

@@ -22,4 +22,10 @@ public final class NativeCore {
     static JSONObject sign(byte[] entropy, JSONObject quote) throws Exception {
         return call(new JSONObject().put("action", "sign").put("entropy", Base64.encodeToString(entropy, Base64.NO_WRAP)).put("quote", quote));
     }
+    static JSONObject ethereumIdentity(byte[] entropy) throws Exception {
+        return call(new JSONObject().put("action", "ethidentity").put("entropy", Base64.encodeToString(entropy, Base64.NO_WRAP)));
+    }
+    static JSONObject ethereumSign(byte[] entropy, JSONObject plan) throws Exception {
+        return call(new JSONObject().put("action", "ethsign").put("entropy", Base64.encodeToString(entropy, Base64.NO_WRAP)).put("ethereum", plan));
+    }
 }

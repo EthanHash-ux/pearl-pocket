@@ -16,7 +16,7 @@
 | 现货成本 | 当前数量的 BigONE 深度、真实桥费 / 净额、同一 Ethereum 区块的 Uniswap Quoter 报价；双向成本试算 |
 | 永续对冲 | BigONE 现货买入与 Lighter 买盘上的空头成交深度、平仓现货价格 / 价差、持仓时间、正负资金费、账户费率、成本和 USDC/USDT 汇率假设 |
 
-**没有 Ethereum 私钥导入、BIP44 私钥派生、内置 WalletConnect 签名、内置 Lighter 开平仓、自动交易、自动跨链或后台套利执行。** 现有 Pearl 助记词和派生路径不会用于网页或 Ethereum 签名。外部签名流程不等于本应用已完成赎回或交易。
+跨链工作台没有 Ethereum 私钥导入、内置 WalletConnect、Lighter 开平仓、自动交易、自动跨链或后台套利执行。网页无法读取本机助记词。0.10.0 的钱包首页另有 [DeFi 模块](DEFI.md)，从同一加密助记词按不同的 BIP44 路径派生私钥，只在本机签署固定 Aave USDC 操作；本工作台的 WPRL / Lighter 流程仍由外部钱包签名。外部签名流程不等于本应用已完成赎回或交易。
 
 ## 固定资产与协议
 
@@ -55,7 +55,7 @@ DEX 当前报价已经包含该池的 1% 手续费和池内价格影响，不重
 
 新增 GET 主机仅为 `api.pearlbridge.xyz` 和 `mainnet.zklighter.elliot.ai`。原 Pearl 广播 POST 仍只允许官方 Blockbook 的固定 `sendtx/`。
 
-Ethereum RPC POST 限制到 `https://ethereum-rpc.publicnode.com`，允许的只有 `eth_chainId`、`eth_blockNumber`、`eth_getBalance` 与固定代币 / Factory / Quoter 的明确 `eth_call`。请求方法、参数、合约及 ABI 输入均受限制；拒绝 `eth_sendRawTransaction`、签名、approve、转账、任意合约和跳转。没有降低 TLS 或证书验证。网页使用系统浏览器，不内嵌可访问钱包密钥的脚本桥。
+本跨链工作台的 `EvmPublicApi` RPC POST 限制到 `https://ethereum-rpc.publicnode.com`，允许的只有 `eth_chainId`、`eth_blockNumber`、`eth_getBalance` 与固定代币 / Factory / Quoter 的明确 `eth_call`。请求方法、参数、合约及 ABI 输入均受限制；拒绝 `eth_sendRawTransaction`、签名、approve、转账、任意合约和跳转。DeFi 的 `DeFiApi` / `httpsDeFi` 使用独立限制，只允许其固定查询和受校验的 Aave USDC 签名交易，见 [DeFi 边界](DEFI.md)。没有降低 TLS 或证书验证。网页使用系统浏览器，不内嵌可访问钱包密钥的脚本桥。
 
 本机保存公开 Ethereum 地址、充值地址固定记录及最多 100 条桥交易 ID；不保存交易所密钥、Ethereum 种子或自动授权。卸载数据会删除这些公开记录及固定地址记忆。
 

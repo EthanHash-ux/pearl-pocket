@@ -38,6 +38,12 @@ public class NextPublicTest {
     if (device().hasObject(By.pkg("com.google.android.inputmethod.latin"))) device().pressBack();
   }
 
+  private boolean receiptBaseline(Context c, String address) throws Exception {
+    org.json.JSONArray states = new org.json.JSONArray(PublicStore.of(c).read("receipt_states"));
+    for (int i=0;i<states.length();i++) if (address.equals(states.getJSONObject(i).getString("address"))) return true;
+    return false;
+  }
+
   private long receiptCount(NotificationManager m, String tag) {
     return Arrays.stream(m.getActiveNotifications()).filter(n -> tag.equals(n.getTag())).count();
   }
@@ -168,9 +174,9 @@ public class NextPublicTest {
               .executeShellCommand("cmd jobscheduler run -f ai.pearl.wallet 808277")
               .contains("Running job"));
       long end = System.currentTimeMillis() + 45000;
-      while (new org.json.JSONArray(PublicStore.of(c).read("receipt_states")).length() == 0
+      while (!receiptBaseline(c, A)
           && System.currentTimeMillis() < end) Thread.sleep(200);
-      assertTrue(new org.json.JSONArray(PublicStore.of(c).read("receipt_states")).length() > 0);
+      assertTrue("The watched address needs its own baseline before injecting a receipt", receiptBaseline(c, A));
       assertEquals(0, manager.getActiveNotifications().length);
       long now = System.currentTimeMillis() / 1000;
       PearlApi.Transaction tx = new PearlApi.Transaction("ab".repeat(32), BigInteger.ONE, now, 0);
@@ -254,7 +260,9 @@ public class NextPublicTest {
     for (int i = 0; i < 5 && !device().hasObject(By.text("查看 / 备注 00000000")); i++)
       device().swipe(500, 1500, 500, 700, 20);
     tap(By.text("查看 / 备注 00000000"));
-    text("本机交易备注（最多 160 字）").setText("Emulator invoice");
+    UiObject2 note = device().wait(Until.findObject(By.desc("本机交易备注（最多 160 字）")), 10000);
+    assertNotNull("Missing transaction note field", note);
+    note.setText("Emulator invoice");
     hideKeyboard();
     tap(By.text("保存备注"));
     assertEquals(

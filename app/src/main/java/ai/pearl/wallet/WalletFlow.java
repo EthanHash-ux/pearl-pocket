@@ -22,6 +22,7 @@ final class WalletFlow {
     static final int AUTH = 4108;
     interface Host { void changed(); String address(); default String name() { return "手机钱包"; } }
     interface SecretAction { void run(byte[] entropy) throws Exception; }
+    interface PublicResult { void ready(JSONObject result) throws Exception; }
     private final Activity activity;
     private final Host host;
     private final WalletVault vault;
@@ -207,6 +208,37 @@ final class WalletFlow {
         unlock("查看离线备份", entropy -> {
             String words = NativeCore.identity(entropy).getString("mnemonic"); int token = generation;
             ui(token, () -> showBackup(words));
+        });
+    }
+    void ethereumAddress(PublicResult callback) {
+        if (!exists() || busy || authWaiting) return;
+        unlock("为当前钱包生成 Ethereum 收款地址", entropy -> {
+            JSONObject result = NativeCore.ethereumIdentity(entropy);
+            new EthereumAccount(activity, slot).save(address(), result);
+            int token = generation;
+            worker.execute(() -> ui(token, () -> {
+                try { callback.ready(result); } catch (Exception e) { notice("Ethereum 地址读取失败", error(e)); }
+            }));
+        });
+    }
+    void ethereumSign(JSONObject preview, PublicResult callback) {
+        if (!exists() || busy || authWaiting) return;
+        if (!backedUp()) { notice("先完成离线备份", "验证助记词备份后，再进行 DeFi 交易。"); return; }
+        final JSONObject plan;
+        try { plan = new JSONObject(preview.toString()); }
+        catch (Exception e) { notice("DeFi 预览无效", error(e)); return; }
+        unlock("确认 Ethereum 主网上的 USDC 借贷操作", entropy -> {
+            String from = NativeCore.ethereumIdentity(entropy).getString("address");
+            if (!from.equalsIgnoreCase(plan.getString("from"))) throw new IllegalArgumentException("Ethereum 付款地址不属于当前钱包");
+            PendingEthereum ethereumPending = new PendingEthereum(activity, slot, from);
+            if (ethereumPending.load() != null) throw new IllegalArgumentException("已有 Ethereum 交易等待确认");
+            JSONObject signed = NativeCore.ethereumSign(entropy, plan);
+            ethereumPending.save(signed);
+            // Queue the public result after unlock's finally wipes entropy/password.
+            int token = generation;
+            worker.execute(() -> ui(token, () -> {
+                try { callback.ready(signed); } catch (Exception e) { notice("交易已保存，结果待确认", error(e)); }
+            }));
         });
     }
     private void showBackup(String words) {

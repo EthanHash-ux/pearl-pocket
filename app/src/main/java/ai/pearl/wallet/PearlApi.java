@@ -276,6 +276,10 @@ public final class PearlApi {
         EvmPublicApi.validateRequest(new JSONObject(body));
         return httpsRequest(EvmPublicApi.RPC, body);
     }
+    static String httpsDeFi(String body) throws Exception {
+        DeFiApi.validateRequest(new JSONObject(body));
+        return httpsRequest(EvmPublicApi.RPC, body);
+    }
     private static String httpsRequest(String url, String raw) throws Exception {
         URI uri = new URI(url);
         if (!"https".equals(uri.getScheme()) || uri.getUserInfo() != null || uri.getPort() != -1

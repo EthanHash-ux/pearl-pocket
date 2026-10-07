@@ -82,12 +82,13 @@ type Quote struct {
 	Expires int64   `json:"expires"`
 }
 type Request struct {
-	Action   string  `json:"action"`
-	Entropy  string  `json:"entropy"`
-	Mnemonic string  `json:"mnemonic"`
-	Raw      string  `json:"raw"`
-	Payment  Payment `json:"payment"`
-	Quote    Quote   `json:"quote"`
+	Action   string       `json:"action"`
+	Entropy  string       `json:"entropy"`
+	Mnemonic string       `json:"mnemonic"`
+	Raw      string       `json:"raw"`
+	Payment  Payment      `json:"payment"`
+	Quote    Quote        `json:"quote"`
+	Ethereum EthereumPlan `json:"ethereum"`
 }
 type Identity struct {
 	Address  string `json:"address"`
@@ -404,6 +405,10 @@ func Execute(input string) (output string) {
 		return `{"error":"请求格式无效"}`
 	}
 	switch r.Action {
+	case "ethintent":
+		result, e = EthereumIntent(r.Ethereum)
+	case "ethtransaction":
+		result, e = EthereumTransaction(r.Raw)
 	case "ethaddress":
 		var address string
 		address, e = EthereumAddress(r.Raw)
@@ -428,11 +433,15 @@ func Execute(input string) (output string) {
 			}
 			wipe(b)
 		}
-	case "identity", "address", "sign":
+	case "identity", "address", "sign", "ethidentity", "ethsign":
 		var b []byte
 		b, e = entropy(r.Entropy)
 		if e == nil {
-			if r.Action == "address" {
+			if r.Action == "ethidentity" {
+				result, e = EthereumIdentity(b)
+			} else if r.Action == "ethsign" {
+				result, e = EthereumSign(b, r.Ethereum)
+			} else if r.Action == "address" {
 				var key *btcec.PrivateKey
 				var addr string
 				key, addr, e = keyFor(b)
