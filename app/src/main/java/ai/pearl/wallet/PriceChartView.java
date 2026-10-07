@@ -41,13 +41,13 @@ public final class PriceChartView extends View {
     @Override protected void onSizeChanged(int w, int h, int oldW, int oldH) {
         super.onSizeChanged(w, h, oldW, oldH);
         gradient = new LinearGradient(0, dp(35), 0, Math.max(dp(36), h - dp(28)),
-                Color.argb(44, 12, 97, 85), Color.argb(0, 12, 97, 85), Shader.TileMode.CLAMP);
+                Color.argb(45,0,112,99),Color.argb(0,0,112,99), Shader.TileMode.CLAMP);
     }
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        float width = getWidth(), height = getHeight(), top = dp(35), bottom = height - dp(28), left = dp(5), right = width - dp(5);
-        paint.setTextSize(dp(11)); paint.setColor(Color.rgb(130, 144, 137));
+        float width = getWidth(), height = getHeight(), top = dp(38), bottom = height - dp(30), left = dp(3), right = width - dp(58);
+        paint.setTextSize(dp(11)); paint.setColor(PearlDesign.MUTED);
         if (points.isEmpty()) {
             paint.setTextAlign(Paint.Align.CENTER); canvas.drawText(emptyMessage, width / 2, height / 2, paint);
             return;
@@ -56,31 +56,36 @@ public final class PriceChartView extends View {
         for (double[] p : points) { min = Math.min(min, p[1]); max = Math.max(max, p[1]); }
         double padding = Math.max((max - min) * .12, max * .001);
         min -= padding; max += padding;
-        paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(dp(1)); paint.setColor(Color.rgb(225, 233, 225));
+        paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(dp(.7f)); paint.setColor(PearlDesign.LINE);
         for (int i = 0; i < 3; i++) {
             float y = top + (bottom - top) * i / 2;
             canvas.drawLine(left, y, right, y, paint);
+            paint.setStyle(Paint.Style.FILL);paint.setTextAlign(Paint.Align.RIGHT);paint.setColor(PearlDesign.MUTED);
+            canvas.drawText(String.format(Locale.ROOT,"%.4f",max-(max-min)*i/2),width-dp(1),y+dp(4),paint);
+            paint.setStyle(Paint.Style.STROKE);paint.setColor(PearlDesign.LINE);
         }
         line.reset(); float sx = 0, sy = 0;
-        double first = points.get(0)[0], span = points.get(points.size() - 1)[0] - first;
+        double first = points.get(0)[0], span = Math.max(1,points.get(points.size() - 1)[0] - first);
+        float lastX=left,lastY=bottom;
         for (int i = 0; i < points.size(); i++) {
             double[] p = points.get(i);
             float x = left + (float) ((p[0] - first) / span) * (right - left);
             float y = bottom - (float) ((p[1] - min) / (max - min)) * (bottom - top);
             if (i == 0) line.moveTo(x, y); else line.lineTo(x, y);
+            lastX=x;lastY=y;
             if (i == selected) { sx = x; sy = y; }
         }
         area.set(line); area.lineTo(right, bottom); area.lineTo(left, bottom); area.close();
         paint.setStyle(Paint.Style.FILL); paint.setShader(gradient);
         canvas.drawPath(area, paint); paint.setShader(null);
-        paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(dp(2)); paint.setColor(Color.rgb(12, 97, 85));
+        paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(dp(2.2f));paint.setStrokeCap(Paint.Cap.ROUND);paint.setStrokeJoin(Paint.Join.ROUND);paint.setColor(PearlDesign.TEAL);
         canvas.drawPath(line, paint); paint.setStyle(Paint.Style.FILL); paint.setTextAlign(Paint.Align.LEFT);
-        paint.setColor(Color.rgb(130, 144, 137));
+        canvas.drawCircle(lastX,lastY,dp(3),paint);paint.setColor(PearlDesign.MUTED);
         canvas.drawText(dateLabel(first), left, height - dp(5), paint);
         paint.setTextAlign(Paint.Align.RIGHT);
         canvas.drawText(dateLabel(points.get(points.size() - 1)[0]), right, height - dp(5), paint);
         if (selected >= 0) {
-            paint.setColor(Color.rgb(12, 97, 85)); canvas.drawCircle(sx, sy, dp(4), paint);
+            paint.setColor(PearlDesign.TEAL); canvas.drawCircle(sx, sy, dp(4), paint);
             canvas.drawLine(sx, top, sx, bottom, paint); paint.setTextAlign(Paint.Align.CENTER);
             double[] p = points.get(selected);
             canvas.drawText(dateLabel(p[0]) + "  " + symbol
@@ -92,7 +97,7 @@ public final class PriceChartView extends View {
         if (points.isEmpty()) return false;
         if (event.getAction() == MotionEvent.ACTION_DOWN || event.getAction() == MotionEvent.ACTION_MOVE) {
             getParent().requestDisallowInterceptTouchEvent(true);
-            double target = points.get(0)[0] + Math.max(0, Math.min(1, event.getX() / getWidth()))
+            double target = points.get(0)[0] + Math.max(0, Math.min(1, (event.getX()-dp(3)) / Math.max(1,getWidth()-dp(61))))
                     * (points.get(points.size() - 1)[0] - points.get(0)[0]);
             selected = 0;
             for (int i = 1; i < points.size(); i++) if (Math.abs(points.get(i)[0] - target) < Math.abs(points.get(selected)[0] - target)) selected = i;

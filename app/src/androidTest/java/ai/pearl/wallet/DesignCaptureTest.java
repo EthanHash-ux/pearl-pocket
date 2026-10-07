@@ -1,0 +1,50 @@
+package ai.pearl.wallet;
+
+import android.app.Activity;
+import android.app.Instrumentation;
+import android.content.Context;
+import android.content.Intent;
+import android.view.WindowManager;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
+import androidx.test.uiautomator.By;
+import androidx.test.uiautomator.UiDevice;
+import androidx.test.uiautomator.UiObject2;
+import androidx.test.uiautomator.Until;
+import org.junit.Assume;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import java.io.File;
+import static org.junit.Assert.*;
+
+/** Opt-in public-screen captures on the disposable emulator; absent from release APKs. */
+@RunWith(AndroidJUnit4.class)
+public class DesignCaptureTest {
+    @Test public void capturePublicScreensOfAKnownPublicFixtureWallet()throws Exception{
+        Assume.assumeTrue("Explicit design-capture run only","true".equals(InstrumentationRegistry.getArguments().getString("capture_design")));
+        Instrumentation instrument=InstrumentationRegistry.getInstrumentation();UiDevice device=UiDevice.getInstance(instrument);Context context=instrument.getTargetContext();
+        assertEquals("1",device.executeShellCommand("getprop ro.kernel.qemu").trim());
+        String address=new WalletVault(context).metadata().getString("address");boolean publicFixture=false;
+        for(int bytes:new int[]{16,20,24,28,32})if(address.equals(NativeCore.address(new byte[bytes])))publicFixture=true;
+        assertTrue("Never capture an unknown wallet",publicFixture);context.getSharedPreferences("public_preferences",Context.MODE_PRIVATE).edit().putBoolean("hide_balances",false).commit();
+        Instrumentation.ActivityMonitor monitor=instrument.addMonitor(MainActivity.class.getName(),null,false);
+        context.startActivity(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));Activity activity=instrument.waitForMonitorWithTimeout(monitor,15000);instrument.removeMonitor(monitor);assertNotNull(activity);
+        assertTrue(device.wait(Until.hasObject(By.text("掌珠钱包")),10000));
+        File output=context.getExternalFilesDir(null);assertNotNull(output);
+        try{
+            // Instrumentation temporarily permits captures of these verified public screens only.
+            // The shipping app always keeps FLAG_SECURE; no intent or preference can bypass it.
+            instrument.runOnMainSync(()->activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE));
+            device.wait(Until.hasObject(By.textContains("BigONE ·")),40000);Thread.sleep(900);capture(device,new File(output,"ui-wallet.png"));
+            tap(device,"行情");device.wait(Until.hasObject(By.textContains("收盘价")),30000);Thread.sleep(600);capture(device,new File(output,"ui-market.png"));
+            tap(device,"挖矿");device.wait(Until.hasObject(By.textContains("接收 ")),30000);Thread.sleep(600);capture(device,new File(output,"ui-mining.png"));
+            tap(device,"设置");Thread.sleep(400);capture(device,new File(output,"ui-settings.png"));
+        }finally{instrument.runOnMainSync(()->{activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);activity.finish();});}
+    }
+    private void tap(UiDevice device,String name){UiObject2 item=device.wait(Until.findObject(By.text(name)),10000);assertNotNull(item);item.click();}
+    private void capture(UiDevice device,File output){
+        assertFalse("Never capture a secret form",device.hasObject(By.clazz("android.widget.EditText")));
+        assertFalse(device.hasObject(By.text("离线助记词备份")));assertFalse(device.hasObject(By.text("恢复手机钱包")));
+        assertTrue(device.takeScreenshot(output));
+    }
+}

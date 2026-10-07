@@ -36,7 +36,7 @@ public class WalletUiTest {
     private final String password="Emulator-wallet-test-42";
     private Context context(){return InstrumentationRegistry.getInstrumentation().getTargetContext();}
     private UiDevice device(){return UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());}
-    private UiObject2 text(String text){UiObject2 item=device().wait(Until.findObject(By.text(text)),30_000);assertNotNull("Expected UI control is missing: "+text,item);return item;}
+    private UiObject2 text(String text){String plain=text.replaceAll("^[^\\p{L}\\p{N}]+","");UiObject2 item=device().wait(Until.findObject(By.text(Pattern.compile(Pattern.quote(text)+"|"+Pattern.quote(plain)))),30_000);assertNotNull("Expected UI control is missing: "+text,item);return item;}
     private void tap(String text){text(text).click();}
     private void authenticate(){UiObject2 pin=device().wait(Until.findObject(By.clazz("android.widget.EditText")),15_000);assertNotNull("System credential entry is missing",pin);pin.setText("24682468");device().pressEnter();}
     private void hideKeyboard(){if(device().hasObject(By.pkg("com.google.android.inputmethod.latin")))device().pressBack();}
@@ -117,10 +117,20 @@ public class WalletUiTest {
         try{tap("↗  发送");tap("扫描收款二维码");UiObject2 permission=device().wait(Until.findObject(By.res("com.android.permissioncontroller:id/permission_allow_foreground_only_button")),2000);if(permission!=null)permission.click();tap("从图片识别二维码");text("发送 PRL");assertNotNull(device().findObject(By.text(address)));assertNotNull(device().findObject(By.text("1.00000001")));tap("取消");}
         finally{instrument.removeMonitor(monitor);context().getContentResolver().delete(image,null,null);}
         tap("⌁\n行情");scrollTo("价格提醒");tap("价格提醒");tap("添加价格提醒");text("目标价格（USDT）").setText("999999");hideKeyboard();tap("保存提醒");
-        UiObject2 allow=device().wait(Until.findObject(By.res("com.android.permissioncontroller:id/permission_allow_button")),2000);if(allow!=null)allow.click();text("价格提醒");assertTrue(device().hasObject(By.textContains("达到 / 高于 999999 USDT")));assertTrue(new PriceAlerts(PublicStore.of(context())).active());tap("删除提醒 999999");text("暂无价格提醒");tap("关闭");
+        UiObject2 allow=device().wait(Until.findObject(By.res("com.android.permissioncontroller:id/permission_allow_button")),2000);if(allow!=null)allow.click();text("价格提醒");assertTrue(device().hasObject(By.textContains("达到 / 高于 999999 USDT")));PriceAlerts savedAlerts=new PriceAlerts(PublicStore.of(context()));assertTrue(savedAlerts.active());
+        long now=System.currentTimeMillis()/1000;assertEquals(1,savedAlerts.claim(new java.math.BigDecimal("1000000"),now,now,true).size());tap("关闭");tap("价格提醒");scrollTo("重新启用 999999");tap("重新启用 999999");text("重新启用价格提醒？");tap("重新启用");assertTrue(device().wait(Until.hasObject(By.textContains("等待触发")),5000));assertTrue(savedAlerts.active());
+        tap("删除提醒 999999");text("暂无价格提醒");tap("关闭");
         tap("◇\n挖矿");tap("挖矿收益计算");String[] hints={"预计费前 PRL / 天","PRL 价格（CNY）","设备功耗（W）","电价（CNY / kWh）","矿池费率（%）","租金（CNY / 天）"};String[] inputs={"10","5","1000","0.5","2","3"};
         for(int i=0;i<hints.length;i++){scrollToDescription(hints[i]);UiObject2 field=device().findObject(By.desc(hints[i]));assertNotNull(field);field.setText(inputs[i]);hideKeyboard();}
         scrollTo("计算收益");tap("计算收益");assertTrue(device().wait(Until.hasObject(By.textContains("每天净收益：¥34.00")),5000));tap("关闭");
+    }
+    @Test public void balancePrivacyPersistsAndContactSearchKeepsSelectionValid()throws Exception{
+        fresh();String address="prl1pr6yuq8u2r95wjzzgpdy8cpnncpl7l8zgy6x5q0367pnc53s2famqg7pt74";recover("abandon ".repeat(11)+"about",address,false);
+        UiObject2 hide=device().wait(Until.findObject(By.desc("隐藏余额")),10000);assertNotNull(hide);hide.click();assertTrue(device().wait(Until.hasObject(By.desc("已确认余额已隐藏")),5000));
+        device().pressHome();context().startActivity(new Intent(context(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));assertTrue(device().wait(Until.hasObject(By.desc("已确认余额已隐藏")),10000));
+        tap("记录");text("全部");text("接收");text("发送");tap("钱包");device().wait(Until.findObject(By.desc("显示余额")),5000).click();assertFalse(device().hasObject(By.desc("已确认余额已隐藏")));
+        context().getSharedPreferences("public_tools",Context.MODE_PRIVATE).edit().remove("contacts").commit();new AddressBook(PublicStore.of(context())).save(null,"Search Alice",address);
+        tap("地址簿");text("搜索名称或地址").setText("nobody");hideKeyboard();text("没有匹配的联系人");UiObject2 search=device().findObject(By.desc("搜索名称或地址"));assertNotNull(search);search.setText("ALICE");hideKeyboard();assertTrue(device().hasObject(By.textContains("Search Alice")));tap("关闭");
     }
     private void scrollTo(String title)throws Exception{for(int i=0;i<8&&!device().hasObject(By.text(title));i++)device().swipe(device().getDisplayWidth()/2,device().getDisplayHeight()*3/4,device().getDisplayWidth()/2,device().getDisplayHeight()/3,25);text(title);}
     private void scrollToDescription(String description){for(int i=0;i<8&&!device().hasObject(By.desc(description));i++)device().swipe(device().getDisplayWidth()/2,device().getDisplayHeight()*3/4,device().getDisplayWidth()/2,device().getDisplayHeight()/3,25);}

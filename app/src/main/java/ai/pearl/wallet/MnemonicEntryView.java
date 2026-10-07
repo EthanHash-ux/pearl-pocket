@@ -40,15 +40,14 @@ final class MnemonicEntryView extends LinearLayout {
         try(BufferedReader r=new BufferedReader(new InputStreamReader(context.getAssets().open("bip39-english.txt"),StandardCharsets.UTF_8))) { String line; while((line=r.readLine())!=null) dictionary.add(line); }
         vocabulary=new MnemonicWords(dictionary);
         int[] labels={R.string.mnemonic_twelve,R.string.mnemonic_twenty_four,R.string.mnemonic_fifteen,R.string.mnemonic_eighteen,R.string.mnemonic_twenty_one};
-        LinearLayout switches=null;
+        LinearLayout switches=new LinearLayout(context);switches.setPadding(dp(3),dp(3),dp(3),dp(3));switches.setBackground(PearlDesign.surface(context,PearlDesign.BG,0,12));addView(switches);
         for(int i=0;i<wordCounts.length;i++) {
-            if(i==0||i==2){switches=new LinearLayout(context);addView(switches);}
             int selected=wordCounts[i];Button button=new Button(context);countButtons[i]=button;
-            button.setText(labels[i]);button.setTextSize(13);button.setAllCaps(false);button.setOnClickListener(v->setCount(selected));
+            button.setText(labels[i]);button.setTextSize(12);button.setAllCaps(false);button.setMinWidth(0);button.setMinimumWidth(0);button.setPadding(dp(2),dp(7),dp(2),dp(7));button.setStateListAnimator(null);button.setOnClickListener(v->setCount(selected));
             switches.addView(button,new LayoutParams(0,-2,1));
         }
         status=new TextView(context); status.setTextSize(13); status.setPadding(dp(4),dp(8),dp(4),dp(10));
-        Button paste=new Button(context); paste.setText(R.string.mnemonic_paste); paste.setAllCaps(false);
+        Button paste=PearlDesign.button(context,context.getString(R.string.mnemonic_paste),PearlDesign.TEAL,PearlDesign.PALE,null);
         paste.setOnClickListener(v->{
             ClipboardManager c=(ClipboardManager)context.getSystemService(Context.CLIPBOARD_SERVICE);
             if(c.getPrimaryClip()==null || c.getPrimaryClip().getItemCount()==0) { status.setText("剪贴板中没有助记词"); return; }
@@ -63,10 +62,10 @@ final class MnemonicEntryView extends LinearLayout {
             LinearLayout line=new LinearLayout(context); line.setOrientation(HORIZONTAL); rows.add(line); addView(line);
             for(int col=0;col<3;col++) {
                 int i=row*3+col;
-                LinearLayout box=new LinearLayout(context); box.setOrientation(VERTICAL); box.setPadding(dp(4),dp(4),dp(4),dp(4));
-                TextView number=new TextView(context); number.setText(String.valueOf(i+1)); number.setTextSize(11); number.setTextColor(Color.rgb(111,126,115)); box.addView(number);
+                LinearLayout box=new LinearLayout(context); box.setOrientation(VERTICAL); box.setPadding(dp(9),dp(8),dp(9),dp(4));box.setBackground(PearlDesign.surface(context,PearlDesign.BG,PearlDesign.LINE,10));
+                TextView number=new TextView(context); number.setText(String.valueOf(i+1)); number.setTextSize(11); number.setTextColor(PearlDesign.MUTED); box.addView(number);
                 AutoCompleteTextView field=new AutoCompleteTextView(context); fields[i]=field;
-                field.setHint("第 "+(i+1)+" 个词"); field.setTextSize(14); field.setSingleLine(true); field.setSelectAllOnFocus(true); field.setSaveEnabled(false);
+                field.setHint("word"); field.setTextSize(13);field.setTextColor(PearlDesign.INK);field.setHintTextColor(PearlDesign.MUTED);field.setPadding(0,0,0,0);field.setBackground(null);field.setSingleLine(true); field.setSelectAllOnFocus(true); field.setSaveEnabled(false);
                 field.setTypeface(Typeface.MONOSPACE); field.setThreshold(1);
                 field.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
                 field.setImeOptions(EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING | EditorInfo.IME_ACTION_NEXT);
@@ -78,7 +77,7 @@ final class MnemonicEntryView extends LinearLayout {
                 });
                 field.setOnFocusChangeListener((v,focused)->{if(!focused){String word=MnemonicWords.normalizeWord(field.getText().toString());updating=true;field.setText(word);updating=false;field.setError(word.isEmpty()||vocabulary.contains(word)?null:"拼写不在词库中");validate();}});
                 field.setOnEditorActionListener((v,action,event)->{if(action==EditorInfo.IME_ACTION_NEXT){if(i+1<count)fields[i+1].requestFocus();return true;}return false;});
-                box.addView(field,new LayoutParams(-1,dp(48))); line.addView(box,new LayoutParams(0,-2,1));
+                box.addView(field,new LayoutParams(-1,dp(36)));LayoutParams cell=new LayoutParams(0,-2,1);cell.setMargins(dp(3),dp(4),dp(3),dp(4));line.addView(box,cell);
             }
         }
         setCount(24);
@@ -87,7 +86,7 @@ final class MnemonicEntryView extends LinearLayout {
     private void setCount(int next){
         if(!MnemonicWords.supportedCount(next))throw new IllegalArgumentException("无效的 BIP39 词数");
         count=next;for(int i=0;i<rows.size();i++)rows.get(i).setVisibility(i<count/3?VISIBLE:GONE);
-        for(int i=0;i<countButtons.length;i++){boolean selected=count==wordCounts[i];countButtons[i].setTextColor(selected?Color.rgb(12,97,85):Color.GRAY);countButtons[i].setTypeface(null,selected?Typeface.BOLD:Typeface.NORMAL);countButtons[i].setSelected(selected);}
+        for(int i=0;i<countButtons.length;i++){boolean selected=count==wordCounts[i];countButtons[i].setTextColor(selected?PearlDesign.TEAL:PearlDesign.MUTED);countButtons[i].setTypeface(Typeface.create(selected?"sans-serif-medium":"sans-serif",Typeface.NORMAL));countButtons[i].setBackground(PearlDesign.touch(getContext(),selected?PearlDesign.WHITE:PearlDesign.BG,0,9));countButtons[i].setSelected(selected);}
         validate();
     }
     private void fill(List<String> words,int start){
@@ -99,7 +98,7 @@ final class MnemonicEntryView extends LinearLayout {
         updating=false;validate();
     }
     private List<String> phrase(){List<String> words=new ArrayList<>();for(int i=0;i<count;i++)words.add(fields[i].getText().toString());return words;}
-    private void validate(){MnemonicWords.Validation v=vocabulary.validate(phrase());status.setText(v.message);status.setTextColor(v.valid?Color.rgb(12,97,85):Color.rgb(111,126,115));if(listener!=null)listener.changed(v.valid);}
+    private void validate(){MnemonicWords.Validation v=vocabulary.validate(phrase());status.setText(v.message);status.setTextColor(v.valid?PearlDesign.TEAL:PearlDesign.MUTED);if(listener!=null)listener.changed(v.valid);}
     void setListener(ChangeListener listener){this.listener=listener;validate();}
     String mnemonic(){List<String> p=phrase();MnemonicWords.Validation v=vocabulary.validate(p);if(!v.valid)throw new IllegalArgumentException(v.message);List<String> clean=new ArrayList<>();for(String w:p)clean.add(MnemonicWords.normalizeWord(w));return String.join(" ",clean);}
     void clear(){updating=true;for(AutoCompleteTextView f:fields){f.dismissDropDown();f.setText("");}updating=false;listener=null;status.setText("");}

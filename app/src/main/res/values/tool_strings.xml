@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="mining_stats">矿池总算力：%1$s\n全网算力：%2$s\n矿池占全网：%3$s%%\n矿工 / 工作器：%4$d / %5$d\n矿池费率：%6$s%%\n主网高度：#%7$d\n接收时间：%8$s%9$s%10$s%11$s\n算力与人数含普通及 Solo 模式。</string>
     <string name="profit_result">每天扣矿池费后收入：¥%1$s\n每天电费：¥%2$s\n每天租金：¥%3$s\n每天净收益：¥%4$s\n30 天净收益：¥%5$s\n90 天净收益：¥%6$s\n盈亏平衡币价：%7$s</string>
     <string name="invalid_payment_qr">%1$s\n请扫描 Pearl 主网收款地址。</string>
 </resources>

@@ -4,7 +4,7 @@ Pearl Pocket（掌珠钱包）是基于 Pearl Research Labs 官方协议代码�
 
 ## 安装与使用
 
-当前版本 **0.4.0**。GitHub 安装包位于本仓库 **Releases → v0.4.0 → Assets**，文件名为 `pearl-wallet-android-0.4.0.apk`；本地构建文件保存在 `artifacts/`。最低 Android 8.0，支持 ARM64 手机与 x86_64 模拟器。此包关闭 Android 调试权限，使用独立本地开发证书签名；仍是未经独立安全审计的开发测试版本。
+当前版本 **0.5.0**。GitHub 安装包位于本仓库 **Releases → v0.5.0 → Assets**，文件名为 `pearl-wallet-android-0.5.0.apk`；本地构建文件保存在 `artifacts/`。最低 Android 8.0，支持 ARM64 手机与 x86_64 模拟器。此包关闭 Android 调试权限，使用独立本地开发证书签名；仍是未经独立安全审计的开发测试版本。
 
 1. 在手机设置中启用锁屏 PIN 或密码，然后打开应用。
 2. 选择「创建手机钱包」，验证手机解锁，设置至少 10 个字符的钱包密码。
@@ -18,11 +18,11 @@ Pearl Pocket（掌珠钱包）是基于 Pearl Research Labs 官方协议代码�
 ## 已实现功能
 
 - 创建钱包、英文 BIP39 助记词恢复、离线备份与备份验证。
-- 主网余额、未确认金额、最近 10 笔交易、浏览器完整历史。
-- 本机地址簿的新增、编辑、删除与发送选择；完整主网地址校验。
+- 主网余额、未确认金额、最近 10 笔交易、浏览器完整历史；余额隐藏与接收 / 发送筛选。
+- 本机地址簿的新增、编辑、删除、名称 / 地址搜索与发送选择；完整主网地址校验。
 - 纯地址收款二维码、复制和分享，可另行指定 PRL 收款金额；相机或本机图片扫码仅预填收款信息。
 - BigONE PRL/USDT WebSocket 实时推送、24 小时涨跌幅、24 小时 / 7 天触摸价格曲线；可选择 USDT、美元或人民币计价。
-- PRL/USDT 一次性目标价提醒，前台随报价检查，后台由 Android 约每 15 分钟调度。
+- PRL/USDT 一次性目标价提醒，前台随报价检查，后台由 Android 约每 15 分钟调度；已触发提醒可重新启用。
 - HeroMiners 公开矿池概览与收益情景计算，含矿池费、电费、租金、30/90 天净收益与盈亏平衡币价。
 - 原生交易详情、确认数和交易 ID 复制。
 - 本地 UTXO 选择、整数 grain 金额、精确手续费与找零、转账审核、Schnorr 签名、官方脚本校验和 HTTPS 广播。
@@ -40,6 +40,16 @@ Pearl Pocket（掌珠钱包）是基于 Pearl Research Labs 官方协议代码�
 通知权限只在保存提醒时申请。提醒使用 BigONE PRL/USDT，新报价达到或超过/低于目标时通知一次。后台最低约 15 分钟检查，省电、断网、系统调度或强制停止会延迟，不能视为即时服务器推送；通知关闭时提醒保留、暂停触发。
 
 挖矿页只查询 HeroMiners 公开统计，不在手机上挖矿。收益计算需填写预计费前 PRL 日产出、币价、功耗、电价、池费和租金；30/90 天假设输入不变，不预测实际产出。产品参考、数据单位与后续计划见 [产品研究](docs/PRODUCT_RESEARCH.md)。
+
+## 原生界面预览
+
+0.5.0 重做钱包、行情、矿业、记录和设置的原生布局，统一颜色、图标、表单与助记词编号网格。下面是 Android 15 模拟器实际运行截图，使用公开的零熵测试向量钱包，不包含真实资产或私钥。
+
+| 钱包首页 | 实时行情 |
+| --- | --- |
+| ![钱包首页](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.5.0/ui-wallet.png) | ![实时行情](https://github.com/EthanHash-ux/pearl-pocket/releases/download/v0.5.0/ui-market.png) |
+
+[设计说明与下一步功能](docs/DESIGN.md)。余额隐藏同步遮盖无障碍朗读内容；发送审核仍显示实际金额。
 
 ## 密钥与网络边界
 
@@ -91,6 +101,8 @@ python3 scripts/check_live_market.py
 
 UI 脚本会清空开发模拟器内的本应用数据，创建并恢复测试钱包；不会发送主网资金。助记词不会写入测试报告。
 
+界面截图仅在明确运行 `DesignCaptureTest` 并传入 `capture_design=true` 时生成。该测试要求模拟器和已知公开测试向量钱包，由测试仪器临时允许四个公开页面截图，结束后恢复截图保护。发布 APK 不包含测试类，也没有取消截图保护的意图或偏好设置入口。
+
 打包关闭调试权限的安装包：
 
 ```sh
@@ -100,7 +112,7 @@ python3 scripts/package_apk.py --sdk /path/to/android-sdk
 
 私有 APK 签名证书与密码保存在构建机器 `~/.pearl-wallet-build/signing`（目录权限 700，文件权限 600），不会打入 APK 或源码。保留该证书才能升级同一安装；正式发行需自行管理发布证书。
 
-专用模拟器上可额外验证旧版有钱包时的覆盖升级：先构建并签名当前 APK，再执行 `python3 scripts/check_release_upgrade.py --reset-test-wallet --previous-apk artifacts/pearl-wallet-android-0.3.1.apk`。脚本会删除模拟器中本应用的测试数据，在旧版创建公开恢复向量钱包，覆盖安装新版后验证地址、备份状态、设备验证和密码解密。`WalletUpgradeTest` 只在该显式流程下运行；常规仪器测试会跳过它。
+专用模拟器上可额外验证旧版有钱包时的覆盖升级：先构建并签名当前 APK，再执行 `python3 scripts/check_release_upgrade.py --reset-test-wallet --previous-apk artifacts/pearl-wallet-android-0.4.0.apk`。脚本会删除模拟器中本应用的测试数据，在旧版创建公开恢复向量钱包，覆盖安装新版后验证地址、备份状态、设备验证和密码解密。`WalletUpgradeTest` 只在该显式流程下运行；常规仪器测试会跳过它。
 
 ## 验证结果与限制
 
@@ -122,7 +134,7 @@ python3 scripts/package_apk.py --sdk /path/to/android-sdk
 
 ## GitHub 发布
 
-发布说明见 [0.4.0 Release notes](docs/releases/v0.4.0.md)。仓库保存本应用完整 Java/Go/JNI 源码、测试、构建脚本和依赖版本；生成的 APK、原生库、SDK、缓存、本机路径和 APK 签名密钥不提交到 Git。
+发布说明见 [0.5.0 Release notes](docs/releases/v0.5.0.md)。仓库保存本应用完整 Java/Go/JNI 源码、测试、构建脚本和依赖版本；生成的 APK、原生库、SDK、缓存、本机路径和 APK 签名密钥不提交到 Git。
 
 将已经验证的安装包、当前源码包、校验文件和测试报告保存在 `artifacts/` 后，可使用 GitHub CLI 登录并运行：
 
@@ -132,4 +144,4 @@ python3 scripts/publish_release.py --repo YOUR_ACCOUNT/pearl-pocket --dry-run
 python3 scripts/publish_release.py --repo YOUR_ACCOUNT/pearl-pocket
 ```
 
-脚本只向指定仓库推送当前 `main` 和 `v0.4.0` 标签，并创建开发测试版 Release；远端标签或同名附件不一致时停止，避免覆盖已经发布的版本。仓库需要先存在，且当前 GitHub 账号拥有写入权限。脚本不会重新生成签名证书。
+脚本只向指定仓库推送当前 `main` 和 `v0.5.0` 标签，并创建开发测试版 Release；远端标签或同名附件不一致时停止，避免覆盖已经发布的版本。仓库需要先存在，且当前 GitHub 账号拥有写入权限。脚本不会重新生成签名证书。

@@ -31,6 +31,12 @@ final class PriceAlerts {
         synchronized(PublicStore.LOCK){List<Alert> alerts=read();if(alerts.size()>=20)throw new IllegalArgumentException("最多保存 20 条提醒，请先删除旧提醒");Alert alert=new Alert(UUID.randomUUID().toString(),target,above,true,0);alerts.add(alert);write(alerts);return alert;}
     }
     void remove(String id)throws Exception{synchronized(PublicStore.LOCK){List<Alert> alerts=read();alerts.removeIf(a->a.id.equals(id));write(alerts);}}
+    void rearm(String id)throws Exception{
+        synchronized(PublicStore.LOCK){List<Alert> alerts=read();boolean found=false;
+            for(int i=0;i<alerts.size();i++){Alert a=alerts.get(i);if(a.id.equals(id)){alerts.set(i,new Alert(a.id,a.target,a.above,true,0));found=true;break;}}
+            if(!found)throw new IllegalArgumentException("提醒已删除，请重新打开提醒列表");write(alerts);
+        }
+    }
     boolean active()throws Exception{for(Alert a:list())if(a.enabled)return true;return false;}
     List<Alert> claim(BigDecimal usdt,long receivedAt,long now,boolean notificationsEnabled)throws Exception{
         List<Alert> fired=new ArrayList<>();

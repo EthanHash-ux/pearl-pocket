@@ -42,9 +42,8 @@ import java.util.concurrent.Executors;
 
 /** Native Android UI with an operation-scoped local signing wallet. */
 public final class MainActivity extends Activity {
-    private static final int INK = Color.rgb(20, 45, 37), GREEN = Color.rgb(12, 97, 85),
-            MUTED = Color.rgb(111, 126, 115), BG = Color.rgb(246, 246, 240),
-            PALE = Color.rgb(232, 239, 226), WHITE = Color.WHITE;
+    private static final int INK=PearlDesign.INK, GREEN=PearlDesign.TEAL, MUTED=PearlDesign.MUTED,
+            BG=PearlDesign.BG, PALE=PearlDesign.PALE, WHITE=PearlDesign.WHITE;
     private final ExecutorService executor = Executors.newFixedThreadPool(3);
     private final PearlApi api = new PearlApi();
     private MarketFeed marketFeed;
@@ -62,7 +61,7 @@ public final class MainActivity extends Activity {
         @Override public void run() { refreshStatus(); if (!address.isEmpty()) refreshAccount(); handler.postDelayed(this, 90_000); }
     };
     private final Runnable priceClock = new Runnable() {
-        @Override public void run() { if (foreground) { updateLabels(); handler.postDelayed(this, 1_000); } }
+        @Override public void run() { if (foreground) { updateLabels();updateMining(); handler.postDelayed(this, 1_000); } }
     };
     private final Runnable chartPoll = new Runnable() {
         @Override public void run() { if (foreground) { if (chart != null) refreshChart(); handler.postDelayed(this, 60_000); } }
@@ -75,6 +74,11 @@ public final class MainActivity extends Activity {
     private boolean loadingMining;
     private String miningError="";
     private AlertDialog receiveDialog;
+    private boolean hideBalances;
+    private String transactionFilter="all", lastRenderedPage="";
+    private final java.util.Map<String,Integer> scrollPositions=new java.util.HashMap<>();
+    private ScrollView scroll;
+    private TextView[] miningValues;
     private LinearLayout root, content, navigation;
     private TextView networkText, balanceText, fiatText, priceText, changeText, priceStatus, balanceStatus;
     private PriceChartView chart;
@@ -91,6 +95,7 @@ public final class MainActivity extends Activity {
         super.onCreate(state);
         preferences = getSharedPreferences("public_preferences", MODE_PRIVATE);
         publicTools=new PublicTools(this);
+        hideBalances=preferences.getBoolean("hide_balances",false);
         if(getIntent().getBooleanExtra("show_market",false))page="market";
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
         walletFlow = new WalletFlow(this, new WalletFlow.Host() {
@@ -123,10 +128,10 @@ public final class MainActivity extends Activity {
         });
         if (android.os.Build.VERSION.SDK_INT >= 27) getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
-        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true);
-        content = column(); content.setPadding(dp(24), dp(20), dp(24), dp(22)); scroll.addView(content);
+        scroll = new ScrollView(this); scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);scroll.setFocusableInTouchMode(true);scroll.setDescendantFocusability(android.view.ViewGroup.FOCUS_BEFORE_DESCENDANTS);scroll.requestFocus();
+        content = column(); content.setPadding(dp(22), dp(20), dp(22), dp(24)); scroll.addView(content);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        navigation = row(); navigation.setPadding(dp(12), dp(6), dp(12), dp(8)); navigation.setBackgroundColor(WHITE);
+        navigation = row(); navigation.setPadding(dp(10), dp(8), dp(10), dp(6)); navigation.setBackgroundColor(WHITE);navigation.setElevation(dp(8));
         root.addView(navigation); setContentView(root);
         render(); refresh();
     }
@@ -144,31 +149,42 @@ public final class MainActivity extends Activity {
         if (border != 0) d.setStroke(dp(1), border); return d;
     }
     private void gap(LinearLayout target, int size) { View v = new View(this); target.addView(v, new LinearLayout.LayoutParams(1, dp(size))); }
-    private Button button(String title, int color, int fill, View.OnClickListener action) {
-        Button b = new Button(this); b.setText(title); b.setTextSize(14); b.setTextColor(color); b.setAllCaps(false);
-        b.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        b.setMinHeight(dp(46)); b.setMinimumHeight(dp(46)); b.setPadding(dp(12), dp(8), dp(12), dp(8));
-        b.setBackground(background(fill, fill == WHITE ? PALE : 0, 14)); b.setOnClickListener(action); return b;
+    private Button button(String title,int color,int fill,View.OnClickListener action){return PearlDesign.button(this,title,color,fill,action);}
+    private View iconButton(String icon,String description,int color,int fill,Runnable action){
+        ImageView image=new ImageView(this);image.setImageDrawable(PearlDesign.icon(this,icon,color,22));image.setContentDescription(description);image.setPadding(dp(11),dp(11),dp(11),dp(11));image.setBackground(PearlDesign.touch(this,fill,0,14));image.setOnClickListener(v->action.run());return image;
     }
+    private Button shortcut(String title,String icon,Runnable action){
+        Button b=button(title,INK,WHITE,v->action.run());b.setCompoundDrawables(null,PearlDesign.icon(this,icon,GREEN,24),null,null);b.setCompoundDrawablePadding(dp(9));b.setPadding(dp(8),dp(15),dp(8),dp(12));return b;
+    }
+    private void between(LinearLayout row,int width){row.addView(new View(this),new LinearLayout.LayoutParams(dp(width),1));}
+    private void heading(String title,String description){content.addView(text(title,27,INK,true));gap(content,8);if(!description.isEmpty()){content.addView(text(description,13,MUTED,false));gap(content,18);}}
+    private void chooseCurrency(){new AlertDialog.Builder(this).setTitle("计价货币").setSingleChoiceItems(new String[]{"USDT","USD 美元","CNY 人民币"},currency.equals("usdt")?0:currency.equals("usd")?1:2,(d,w)->{d.dismiss();changeCurrency(new String[]{"usdt","usd","cny"}[w]);}).setNegativeButton("取消",null).show();}
+    private void toggleBalances(){hideBalances=!hideBalances;preferences.edit().putBoolean("hide_balances",hideBalances).apply();render();}
+    private void segments(LinearLayout parent,String[] labels,String[] values,String selected,java.util.function.Consumer<String> change){
+        LinearLayout group=row();group.setPadding(dp(4),dp(4),dp(4),dp(4));group.setBackground(background(PearlDesign.LINE,0,14));
+        for(int i=0;i<labels.length;i++){String value=values[i];Button b=button(labels[i],selected.equals(value)?INK:MUTED,selected.equals(value)?WHITE:PearlDesign.LINE,v->change.accept(value));b.setMinHeight(dp(38));b.setMinimumHeight(dp(38));b.setPadding(dp(5),dp(6),dp(5),dp(6));b.setTextSize(13);weighted(group,b);}parent.addView(group);
+    }
+
     private LinearLayout card(int color) {
-        LinearLayout l = column(); l.setBackground(background(color, color == WHITE ? PALE : 0, 22));
+        LinearLayout l = column(); l.setBackground(background(color, color == WHITE ? PearlDesign.LINE : 0, 22));
         l.setPadding(dp(20), dp(20), dp(20), dp(20)); return l;
     }
     private void weighted(LinearLayout row, View v) { row.addView(v, new LinearLayout.LayoutParams(0, -2, 1)); }
 
     private void render() {
+        if(!lastRenderedPage.isEmpty())scrollPositions.put(lastRenderedPage,scroll.getScrollY());
+        lastRenderedPage=page;
+        scroll.requestFocus();
         content.removeAllViews(); priceText = null; changeText = null; priceStatus = null; balanceText = null;
         fiatText = null; balanceStatus = null; chart = null; chartSource = null; chartShownCurrency = ""; chartShownRate = null;
-        miningText=null;
-        LinearLayout header = row();
-        ImageView logo = new ImageView(this); logo.setImageResource(R.drawable.ic_pearl);
-        logo.setBackground(background(GREEN, 0, 12)); header.addView(logo, new LinearLayout.LayoutParams(dp(42), dp(42)));
-        LinearLayout branding = column(); branding.setPadding(dp(11), 0, 0, 0);
-        branding.addView(text("Pearl Pocket", 23, INK, true)); branding.addView(text("掌珠钱包 · 你的 Pearl，随身而行", 11, MUTED, false)); weighted(header, branding);
-        Button reload = button("↻", GREEN, PALE, v -> refresh()); reload.setContentDescription("刷新行情和链上数据");
-        header.addView(reload, new LinearLayout.LayoutParams(dp(42), dp(42))); content.addView(header); gap(content, 22);
-        LinearLayout info = row(); networkText = text("●  Pearl 主网", 12, GREEN, true); weighted(info, networkText);
-        TextView mode = text(address.isEmpty() ? "手机独立钱包" : "本地签名 · 密钥已锁定", 10, MUTED, false); info.addView(mode); content.addView(info); gap(content, 18);
+        miningText=null;miningValues=null;
+        if(page.equals("wallet")){
+        LinearLayout header=row();
+        ImageView logo=new ImageView(this);logo.setImageResource(R.drawable.ic_pearl_mark);logo.setPadding(dp(8),dp(8),dp(8),dp(8));logo.setBackground(background(INK,0,14));header.addView(logo,new LinearLayout.LayoutParams(dp(44),dp(44)));
+        LinearLayout branding=column();branding.setPadding(dp(12),0,0,0);branding.addView(text("掌珠钱包",21,INK,true));TextView wordmark=text("PEARL POCKET",11,MUTED,true);wordmark.setLetterSpacing(.13f);gap(branding,4);branding.addView(wordmark);weighted(header,branding);
+        header.addView(iconButton("refresh","刷新行情和链上数据",INK,WHITE,this::refresh),new LinearLayout.LayoutParams(dp(44),dp(44)));content.addView(header);gap(content,18);
+        LinearLayout info=row();networkText=text("Pearl 主网 · 连接中",11,GREEN,true);weighted(info,networkText);TextView mode=text(address.isEmpty()?"手机独立钱包":"密钥已锁定",11,MUTED,false);info.addView(mode);content.addView(info);gap(content,20);
+        }else networkText=null;
         switch (page) {
             case "market": renderMarket(); break;
             case "activity": renderActivity(); break;
@@ -178,135 +194,104 @@ public final class MainActivity extends Activity {
         }
         renderNavigation(); updateLabels();
         if (chart != null) refreshChart();
+        int position=scrollPositions.getOrDefault(page,0);scroll.post(()->scroll.scrollTo(0,position));
     }
 
-    private void renderWallet() {
-        LinearLayout balance = card(GREEN);
-        balance.addView(text("已确认余额", 12, Color.rgb(196, 224, 202), false)); gap(balance, 15);
-        balanceText = text("—", 34, WHITE, true); balanceText.setAutoSizeTextTypeUniformWithConfiguration(18, 34, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
-        balanceText.setMaxLines(1); balance.addView(balanceText); gap(balance, 8);
-        fiatText = text("创建钱包后查看资产", 13, Color.rgb(211, 232, 209), false); balance.addView(fiatText); gap(balance, 20);
-        LinearLayout actions = row(); weighted(actions, button("↗  发送", GREEN, PALE, v -> walletFlow.send()));
-        View spacer = new View(this); actions.addView(spacer, new LinearLayout.LayoutParams(dp(12), 1));
-        weighted(actions, button("↙  接收", GREEN, WHITE, v -> receive())); balance.addView(actions); gap(balance, 12);
-        balanceStatus = text(address.isEmpty() ? "创建或恢复后即可收款" : "密钥加密保存在本机", 10, Color.rgb(196, 224, 202), false);
-        balance.addView(balanceStatus); content.addView(balance); gap(content, 16);
-        if (address.isEmpty()) {
-            LinearLayout setup = card(WHITE); setup.addView(text("开始使用 Pearl", 17, INK, true)); gap(setup, 7);
-            setup.addView(text("私钥由手机保存，转账在本机签名。先创建新钱包，或恢复本应用的助记词。", 12, MUTED, false)); gap(setup, 14);
-            setup.addView(button("创建手机钱包", WHITE, GREEN, v -> walletFlow.setup(false))); gap(setup, 10);
-            setup.addView(button("恢复已有手机钱包", GREEN, PALE, v -> walletFlow.setup(true))); content.addView(setup); gap(content, 16);
-        } else {
-            LinearLayout a = row(); weighted(a, text(PearlAddress.shortLabel(address), 12, MUTED, false));
-            Button change = button(walletFlow.backedUp() ? "离线备份 ✓" : "备份助记词", GREEN, BG, v -> walletFlow.backup()); a.addView(change); content.addView(a); gap(content, 12);
+    private void renderWallet(){
+        LinearLayout balance=card(INK);balance.setBackground(PearlDesign.assetSurface(this));balance.setPadding(dp(23),dp(21),dp(23),dp(21));
+        LinearLayout top=row();weighted(top,text("已确认余额",13,Color.rgb(192,216,221),false));top.addView(iconButton(hideBalances?"eye-off":"eye",hideBalances?"显示余额":"隐藏余额",PearlDesign.MINT,Color.TRANSPARENT,this::toggleBalances),new LinearLayout.LayoutParams(dp(44),dp(44)));balance.addView(top);gap(balance,8);
+        balanceText=text("— PRL",37,WHITE,true);balanceText.setMaxLines(1);balanceText.setAutoSizeTextTypeUniformWithConfiguration(22,37,1,android.util.TypedValue.COMPLEX_UNIT_SP);balance.addView(balanceText);gap(balance,10);
+        fiatText=text("创建钱包后查看资产",15,Color.rgb(206,225,227),false);balance.addView(fiatText);gap(balance,22);
+        LinearLayout footer=row();TextView secure=text("本机签名",11,PearlDesign.MINT,true);secure.setCompoundDrawables(PearlDesign.icon(this,"shield",PearlDesign.MINT,15),null,null,null);secure.setCompoundDrawablePadding(dp(5));weighted(footer,secure);
+        Button denomination=button(currency.toUpperCase(Locale.ROOT)+" ▾",WHITE,Color.argb(22,255,255,255),v->chooseCurrency());denomination.setMinHeight(dp(32));denomination.setMinimumHeight(dp(32));denomination.setPadding(dp(10),dp(3),dp(10),dp(3));denomination.setTextSize(11);denomination.setContentDescription("切换计价货币");footer.addView(denomination);balance.addView(footer);gap(balance,13);
+        balanceStatus=text("密钥加密保存在本机",11,Color.rgb(185,206,211),false);balance.addView(balanceStatus);content.addView(balance);gap(content,14);
+        LinearLayout actions=row();weighted(actions,shortcut("发送","send",()->walletFlow.send()));between(actions,10);weighted(actions,shortcut("接收","receive",this::receive));between(actions,10);weighted(actions,shortcut("地址簿","contacts",()->publicTools.addressBook(null)));content.addView(actions);gap(content,20);
+        if(address.isEmpty()){
+            LinearLayout setup=card(WHITE);setup.addView(text("开启你的 Pearl 钱包",18,INK,true));gap(setup,8);setup.addView(text("创建新钱包，或用助记词找回你的资产。",13,MUTED,false));gap(setup,16);
+            setup.addView(button("创建手机钱包",WHITE,GREEN,v->walletFlow.setup(false)));gap(setup,8);setup.addView(button("恢复已有手机钱包",GREEN,PALE,v->walletFlow.setup(true)));content.addView(setup);gap(content,18);
+        }else{
+            LinearLayout wallet=card(WHITE);wallet.setPadding(dp(16),dp(16),dp(16),dp(16));LinearLayout addressRow=row();LinearLayout detail=column();detail.addView(text(walletFlow.backedUp()?"钱包地址 · 已备份":"钱包地址 · 待备份",11,MUTED,false));gap(detail,6);TextView compact=text(PearlAddress.shortLabel(address),13,INK,true);compact.setMaxLines(1);detail.addView(compact);weighted(addressRow,detail);addressRow.addView(iconButton("copy","复制钱包地址",GREEN,PALE,()->copy("Pearl 地址",address)),new LinearLayout.LayoutParams(dp(44),dp(44)));between(addressRow,6);addressRow.addView(iconButton("shield",walletFlow.backedUp()?"查看离线备份":"完成助记词备份",GREEN,BG,()->walletFlow.backup()),new LinearLayout.LayoutParams(dp(44),dp(44)));wallet.addView(addressRow);content.addView(wallet);gap(content,18);
         }
-        renderPriceCard(false); gap(content, 22);
-        LinearLayout heading = row(); weighted(heading, text("最近交易", 18, INK, true));
-        Button all = button("查看全部 →", GREEN, BG, v -> { page = "activity"; render(); }); heading.addView(all); content.addView(heading); gap(content, 12);
-        renderTransactions(3);
+        renderPriceCard(false);gap(content,22);LinearLayout heading=row();weighted(heading,text("最近交易",19,INK,true));Button all=button("查看全部",GREEN,BG,v->{page="activity";render();});all.setTextSize(12);heading.addView(all);content.addView(heading);gap(content,10);renderTransactions(3);
     }
 
-    private void renderPriceCard(boolean large) {
-        LinearLayout market = card(WHITE); LinearLayout top = row();
-        TextView icon = text("P", 20, GREEN, true); icon.setGravity(Gravity.CENTER); icon.setBackground(background(PALE, 0, 14));
-        top.addView(icon, new LinearLayout.LayoutParams(dp(44), dp(44)));
-        LinearLayout name = column(); name.setPadding(dp(12), 0, 0, 0); name.addView(text("Pearl", 16, INK, true)); name.addView(text("PRL · 主网原生币", 11, MUTED, false)); weighted(top, name);
-        if (!large) top.addView(button("↗", GREEN, BG, v -> { page = "market"; render(); })); market.addView(top); gap(market, 18);
-        LinearLayout numbers = row(); priceText = text("—", large ? 32 : 24, INK, true); weighted(numbers, priceText);
-        changeText = text("—", 12, GREEN, true); numbers.addView(changeText); market.addView(numbers); gap(market, 6);
-        priceStatus = text("实时行情连接中", 10, MUTED, false); market.addView(priceStatus);
-        if (large) {
-            gap(market, 15); LinearLayout times = row(); weighted(times, button("24 小时", days == 1 ? WHITE : GREEN, days == 1 ? GREEN : PALE, v -> { days = 1; render(); }));
-            View spacer = new View(this); times.addView(spacer, new LinearLayout.LayoutParams(dp(10), 1));
-            weighted(times, button("7 天", days == 7 ? WHITE : GREEN, days == 7 ? GREEN : PALE, v -> { days = 7; render(); })); market.addView(times);
-            chart = new PriceChartView(this); market.addView(chart, new LinearLayout.LayoutParams(-1, dp(215)));
-            chartSource = text("历史行情加载中", 10, MUTED, false); market.addView(chartSource); displayChart();
-        }
+    private void renderPriceCard(boolean large){
+        LinearLayout market=card(WHITE);LinearLayout top=row();ImageView token=new ImageView(this);token.setImageResource(R.drawable.ic_pearl_mark);token.setPadding(dp(10),dp(10),dp(10),dp(10));token.setBackground(background(GREEN,0,14));top.addView(token,new LinearLayout.LayoutParams(dp(44),dp(44)));
+        LinearLayout name=column();name.setPadding(dp(12),0,0,0);name.addView(text("Pearl",17,INK,true));gap(name,4);name.addView(text("PRL · 主网原生币",11,MUTED,false));weighted(top,name);
+        if(!large)top.addView(iconButton("chevron","查看 Pearl 行情",MUTED,BG,()->{page="market";render();}),new LinearLayout.LayoutParams(dp(40),dp(40)));else top.addView(text("24h",11,MUTED,false));market.addView(top);gap(market,20);
+        LinearLayout numbers=row();priceText=text("—",large?34:26,INK,true);priceText.setMaxLines(1);priceText.setAutoSizeTextTypeUniformWithConfiguration(19,large?34:26,1,android.util.TypedValue.COMPLEX_UNIT_SP);weighted(numbers,priceText);changeText=text("—",12,GREEN,true);changeText.setPadding(dp(8),dp(6),dp(8),dp(6));changeText.setBackground(background(PALE,0,8));numbers.addView(changeText);market.addView(numbers);gap(market,10);
+        priceStatus=text("实时行情连接中",11,MUTED,false);market.addView(priceStatus);
+        if(large){gap(market,20);segments(market,new String[]{"24 小时","7 天"},new String[]{"1","7"},String.valueOf(days),value->{days=Integer.parseInt(value);render();});
+            chart=new PriceChartView(this);market.addView(chart,new LinearLayout.LayoutParams(-1,dp(235)));chartSource=text("历史行情加载中",11,MUTED,false);market.addView(chartSource);displayChart();}
         content.addView(market);
     }
 
-    private void renderMarket() {
-        content.addView(text("Pearl 行情", 26, INK, true)); gap(content, 8);
-        content.addView(text("关注价格，也了解你的资产。", 12, MUTED, false)); gap(content, 22); renderPriceCard(true); gap(content, 18);
-        content.addView(button("价格提醒",WHITE,GREEN,v->publicTools.priceAlerts()));gap(content,18);
-        LinearLayout about = card(PALE); about.addView(text("让计算创造价值", 16, GREEN, true)); gap(about, 8);
-        about.addView(text("Pearl 是采用 Proof-of-Useful-Work 的独立 L1 网络。PRL 是其原生资产。", 12, INK, false)); gap(about, 14);
-        about.addView(button("了解 Pearl →", GREEN, WHITE, v -> open("https://pearlresearch.ai"))); content.addView(about);
+    private void renderMarket(){
+        heading("市场行情","实时价格、历史走势与目标价提醒");renderPriceCard(true);gap(content,16);
+        LinearLayout alert=card(WHITE);LinearLayout line=row();ImageView icon=new ImageView(this);icon.setImageDrawable(PearlDesign.icon(this,"bell",GREEN,25));icon.setPadding(dp(10),dp(10),dp(10),dp(10));icon.setBackground(background(PALE,0,14));line.addView(icon,new LinearLayout.LayoutParams(dp(46),dp(46)));
+        LinearLayout words=column();words.setPadding(dp(12),0,0,0);words.addView(text("价格提醒",16,INK,true));gap(words,4);words.addView(text("到达目标价，通知你",12,MUTED,false));weighted(line,words);line.addView(iconButton("chevron","管理价格提醒",MUTED,WHITE,()->publicTools.priceAlerts()),new LinearLayout.LayoutParams(dp(40),dp(40)));line.setOnClickListener(v->publicTools.priceAlerts());alert.addView(line);content.addView(alert);gap(content,16);
+        LinearLayout about=card(PALE);about.addView(text("让计算创造价值",17,GREEN,true));gap(about,8);about.addView(text("Pearl 是采用有用工作证明的独立 L1 网络。PRL 是它的原生资产。",13,INK,false));gap(about,12);about.addView(button("了解 Pearl",GREEN,WHITE,v->open("https://pearlresearch.ai")));content.addView(about);
     }
 
-    private void renderActivity() {
-        content.addView(text("交易记录", 26, INK, true)); gap(content, 8);
-        content.addView(text(address.isEmpty() ? "创建钱包后展示真实链上记录。" : PearlAddress.shortLabel(address) + " · 最近 10 笔", 12, MUTED, false)); gap(content, 22);
-        renderTransactions(10);
-        if (account != null && account.transactionCount > 10) {
-            gap(content, 16); content.addView(button("在浏览器查看完整记录", GREEN, PALE,
-                    v -> open("https://explorer.pearlresearch.ai/address/" + address + "?network=mainnet")));
-        }
+    private void renderActivity(){
+        heading("交易记录",address.isEmpty()?"创建钱包后查看你的收发记录。":PearlAddress.shortLabel(address)+" · 最近 10 笔");
+        segments(content,new String[]{"全部","接收","发送"},new String[]{"all","received","sent"},transactionFilter,value->{transactionFilter=value;render();});gap(content,18);renderTransactions(10);
+        if(account!=null&&account.transactionCount>10){gap(content,16);content.addView(button("在浏览器查看完整记录",GREEN,PALE,v->open("https://explorer.pearlresearch.ai/address/"+address+"?network=mainnet")));}
     }
 
     private void renderTransactions(int limit) {
-        if (account == null || account.transactions.isEmpty()) {
-            LinearLayout empty = card(WHITE); gap(empty, 8); TextView mark = text("↙  ↗", 25, GREEN, true); mark.setGravity(Gravity.CENTER); empty.addView(mark); gap(empty, 12);
-            TextView title = text(account == null ? (loadingAccount ? "链上数据加载中" : "暂无交易数据") : "这个地址还没有交易", 14, INK, true); title.setGravity(Gravity.CENTER); empty.addView(title); gap(empty, 8);
-            TextView detail = text(accountError.isEmpty() ? "收发记录将在这里显示" : accountError, 11, MUTED, false); detail.setGravity(Gravity.CENTER); empty.addView(detail); gap(empty, 8); content.addView(empty); return;
+        java.util.List<PearlApi.Transaction> visible=new java.util.ArrayList<>();
+        if(account!=null)for(PearlApi.Transaction tx:account.transactions)if(!page.equals("activity")||transactionFilter.equals("all")||(transactionFilter.equals("received")?tx.netGrains.signum()>=0:tx.netGrains.signum()<0))visible.add(tx);
+        if (account == null || visible.isEmpty()) {
+            LinearLayout empty=card(WHITE);empty.setGravity(Gravity.CENTER_HORIZONTAL);gap(empty,12);ImageView mark=new ImageView(this);mark.setImageDrawable(PearlDesign.icon(this,"activity",MUTED,27));mark.setPadding(dp(12),dp(12),dp(12),dp(12));mark.setBackground(background(BG,0,18));empty.addView(mark,new LinearLayout.LayoutParams(dp(52),dp(52)));gap(empty,15);
+            TextView title=text(account==null?(loadingAccount?"链上数据加载中":"暂无交易数据"):account.transactions.isEmpty()?"还没有交易":"没有符合筛选的交易",15,INK,true);title.setGravity(Gravity.CENTER);empty.addView(title);gap(empty,8);
+            TextView detail=text(accountError.isEmpty()?"你的 PRL 收发记录会显示在这里":accountError,12,MUTED,false);detail.setGravity(Gravity.CENTER);empty.addView(detail);gap(empty,12);content.addView(empty);return;
         }
-        LinearLayout list = card(WHITE); int n = Math.min(limit, account.transactions.size());
+        LinearLayout list = card(WHITE); int n = Math.min(limit, visible.size());
         for (int i = 0; i < n; i++) {
-            PearlApi.Transaction tx = account.transactions.get(i); boolean received = tx.netGrains.signum() >= 0;
+            PearlApi.Transaction tx = visible.get(i); boolean received = tx.netGrains.signum() >= 0;
             LinearLayout entry = row(); entry.setPadding(0, dp(10), 0, dp(10));
-            TextView direction = text(received ? "↙" : "↗", 22, GREEN, false); direction.setGravity(Gravity.CENTER); direction.setBackground(background(PALE, 0, 12));
-            entry.addView(direction, new LinearLayout.LayoutParams(dp(38), dp(38)));
+            ImageView direction=new ImageView(this);direction.setImageDrawable(PearlDesign.icon(this,received?"receive":"send",received?GREEN:INK,20));direction.setPadding(dp(10),dp(10),dp(10),dp(10));direction.setBackground(background(received?PALE:BG,0,13));
+            entry.addView(direction, new LinearLayout.LayoutParams(dp(42), dp(42)));
             LinearLayout details = column(); details.setPadding(dp(12), 0, dp(5), 0);
             details.addView(text(received ? "接收 PRL" : "发送 PRL", 13, INK, true));
             details.addView(text(tx.confirmations == 0 ? "待确认" : tx.confirmations + " 次确认 · " + time(tx.time), 10, MUTED, false)); weighted(entry, details);
             LinearLayout amount = column(); amount.setGravity(Gravity.END);
-            amount.addView(text((received ? "+" : "") + PearlAmount.format(tx.netGrains), 12, received ? GREEN : INK, true));
+            amount.addView(text(hideBalances?"••••":(received ? "+" : "") + PearlAmount.format(tx.netGrains), 14, received ? GREEN : INK, true));
             amount.addView(text("PRL  ›", 10, MUTED, false)); entry.addView(amount);
-            entry.setContentDescription((received ? "接收 " : "发送 ") + PearlAmount.format(tx.netGrains.abs()) + " PRL，查看交易详情");
+            entry.setContentDescription((received?"接收 ":"发送 ")+(hideBalances?"金额已隐藏":PearlAmount.format(tx.netGrains.abs())+" PRL")+"，查看交易详情");
             entry.setOnClickListener(v -> transactionDetail(tx)); list.addView(entry);
             if (i < n - 1) { View divider = new View(this); divider.setBackgroundColor(PALE); list.addView(divider, new LinearLayout.LayoutParams(-1, dp(1))); }
         }
         content.addView(list);
     }
 
-    private void renderSettings() {
-        content.addView(text("设置", 26, INK, true)); gap(content, 22);
-        LinearLayout settings = card(WHITE); settings.addView(text("计价货币", 14, INK, true)); gap(settings, 12);
-        LinearLayout currencies = row(); weighted(currencies, button("USDT", currency.equals("usdt") ? WHITE : GREEN, currency.equals("usdt") ? GREEN : PALE, v -> changeCurrency("usdt")));
-        weighted(currencies, button("USD 美元", currency.equals("usd") ? WHITE : GREEN, currency.equals("usd") ? GREEN : PALE, v -> changeCurrency("usd")));
-        View spacer = new View(this); currencies.addView(spacer, new LinearLayout.LayoutParams(dp(10), 1));
-        weighted(currencies, button("CNY 人民币", currency.equals("cny") ? WHITE : GREEN, currency.equals("cny") ? GREEN : PALE, v -> changeCurrency("cny"))); settings.addView(currencies); content.addView(settings); gap(content, 16);
-        LinearLayout wallet = card(WHITE); wallet.addView(text("手机独立钱包", 14, INK, true)); gap(wallet, 8);
-        wallet.addView(text(address.isEmpty() ? "在本机创建钱包，私钥加密保存。" : "每次签名、查看备份均需手机解锁验证和钱包密码。切到后台会关闭敏感页面。", 12, MUTED, false)); gap(wallet, 12);
-        if (address.isEmpty()) {
-            wallet.addView(button("创建手机钱包", WHITE, GREEN, v -> walletFlow.setup(false))); gap(wallet, 10);
-            wallet.addView(button("恢复已有手机钱包", GREEN, PALE, v -> walletFlow.setup(true)));
-        } else {
-            wallet.addView(button(walletFlow.backedUp() ? "查看离线备份" : "完成助记词备份", GREEN, PALE, v -> walletFlow.backup())); gap(wallet, 10);
-            wallet.addView(button("查询或重发待确认交易", GREEN, BG, v -> walletFlow.pendingStatus())); gap(wallet, 10);
-            wallet.addView(text("备份适用于本应用。采用 Pearl 主网 Taproot 地址，固定收款与找零地址。此版本不支持 Oyster XMSS 钱包导入。", 11, MUTED, false));
-        }
-        content.addView(wallet); gap(content, 16);
-        content.addView(button("地址簿",GREEN,WHITE,v->publicTools.addressBook(null)));gap(content,16);
-        LinearLayout sources = card(PALE); sources.addView(text("数据来源", 14, GREEN, true)); gap(sources, 8);
-        sources.addView(text("链上：Pearl 官方 Blockbook\n行情：BigONE PRL/USDT 实时推送\n汇率 / 备用参考：CoinGecko\n矿池：HeroMiners 公开统计\n网络：Pearl Mainnet\n版本：0.4.0 手机钱包", 12, INK, false)); gap(sources, 12);
-        sources.addView(button("查看掌珠钱包源码", GREEN, WHITE, v -> open("https://github.com/EthanHash-ux/pearl-pocket")));gap(sources,8);
-        sources.addView(button("查看 Pearl 协议源码", GREEN, WHITE, v -> open("https://github.com/pearl-research-labs/pearl"))); content.addView(sources);
+    private void renderSettings(){
+        heading("偏好与安全","计价、隐私与钱包管理");
+        LinearLayout settings=card(WHITE);settings.addView(text("计价货币",15,INK,true));gap(settings,14);segments(settings,new String[]{"USDT","USD 美元","CNY 人民币"},new String[]{"usdt","usd","cny"},currency,this::changeCurrency);content.addView(settings);gap(content,16);
+        LinearLayout privacy=card(WHITE);LinearLayout line=row();LinearLayout words=column();words.addView(text("隐藏资产金额",15,INK,true));gap(words,6);words.addView(text("钱包与记录页隐藏余额和交易金额",12,MUTED,false));weighted(line,words);android.widget.Switch toggle=new android.widget.Switch(this);toggle.setContentDescription("隐藏资产金额");toggle.setChecked(hideBalances);toggle.setThumbTintList(android.content.res.ColorStateList.valueOf(WHITE));toggle.setTrackTintList(new android.content.res.ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{GREEN,Color.rgb(142,162,174)}));toggle.setOnCheckedChangeListener((b,checked)->{hideBalances=checked;preferences.edit().putBoolean("hide_balances",checked).apply();});line.addView(toggle);privacy.addView(line);gap(privacy,10);privacy.addView(text("转账确认仍显示实际金额，便于准确核对。",11,MUTED,false));content.addView(privacy);gap(content,16);
+        LinearLayout wallet=card(WHITE);wallet.addView(text("钱包安全",16,INK,true));gap(wallet,8);wallet.addView(text(address.isEmpty()?"在本机创建钱包，私钥加密保存。":"查看备份与每次签名，都需要手机验证和钱包密码。",13,MUTED,false));gap(wallet,15);
+        if(address.isEmpty()){wallet.addView(button("创建手机钱包",WHITE,GREEN,v->walletFlow.setup(false)));gap(wallet,8);wallet.addView(button("恢复已有手机钱包",GREEN,PALE,v->walletFlow.setup(true)));}
+        else{wallet.addView(button(walletFlow.backedUp()?"查看离线备份":"完成助记词备份",GREEN,PALE,v->walletFlow.backup()));gap(wallet,8);wallet.addView(button("查询或重发待确认交易",INK,BG,v->walletFlow.pendingStatus()));gap(wallet,8);wallet.addView(button("钱包恢复兼容性",MUTED,WHITE,v->walletFlow.notice("钱包恢复兼容性","支持本应用 BIP39 英文 12 / 15 / 18 / 21 / 24 词，BIP39 附加口令为空。使用 Pearl 主网 Taproot 地址，固定收款与找零地址。尚不支持 Oyster XMSS 全钱包恢复。")));}
+        content.addView(wallet);gap(content,16);LinearLayout tools=card(WHITE);tools.addView(text("日常工具",16,INK,true));gap(tools,12);tools.addView(button("地址簿",GREEN,BG,v->publicTools.addressBook(null)));gap(tools,8);tools.addView(button("价格提醒",GREEN,BG,v->publicTools.priceAlerts()));content.addView(tools);gap(content,16);
+        LinearLayout sources=card(WHITE);sources.addView(text("关于掌珠钱包",16,INK,true));gap(sources,8);sources.addView(text("Pearl Pocket · 0.5.0\nPearl Mainnet · 手机独立钱包",13,MUTED,false));gap(sources,14);sources.addView(button("数据来源",INK,BG,v->walletFlow.notice("数据来源","链上：Pearl 官方 Blockbook\n行情：BigONE PRL/USDT 实时推送\n汇率 / 备用参考：CoinGecko\n矿池：HeroMiners 公开统计")));gap(sources,8);sources.addView(button("查看掌珠钱包源码",GREEN,WHITE,v->open("https://github.com/EthanHash-ux/pearl-pocket")));content.addView(sources);
     }
 
     private void transactionDetail(PearlApi.Transaction tx){
-        String movement=(tx.netGrains.signum()>=0?"+":"")+PearlAmount.format(tx.netGrains)+" PRL";
+        String movement=hideBalances?"金额已隐藏":(tx.netGrains.signum()>=0?"+":"")+PearlAmount.format(tx.netGrains)+" PRL";
         AlertDialog d=new AlertDialog.Builder(this).setTitle("交易详情").setMessage("本地址余额变化\n"+movement+"\n转出时包含手续费与找零的净变化。\n\n状态："+(tx.confirmations==0?"待确认":tx.confirmations+" 次确认")+"\n时间："+time(tx.time)+"\n\n交易 ID\n"+tx.id)
-                .setNegativeButton("关闭",null).setNeutralButton("复制交易 ID",(x,w)->copy("Pearl 交易 ID",tx.id)).setPositiveButton("区块浏览器",(x,w)->open("https://explorer.pearlresearch.ai/tx/"+tx.id+"?network=mainnet")).create();d.show();d.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+                .setNegativeButton("关闭",null).setNeutralButton("复制交易 ID",(x,w)->copy("Pearl 交易 ID",tx.id)).setPositiveButton("区块浏览器",(x,w)->open("https://explorer.pearlresearch.ai/tx/"+tx.id+"?network=mainnet")).create();d.show();PearlDesign.dialog(d);
     }
     private void renderMining(){
-        content.addView(text("挖矿工具",26,INK,true));gap(content,8);content.addView(text("查看公开统计，计算你的收益情景。",12,MUTED,false));gap(content,18);
-        LinearLayout pool=card(WHITE);pool.addView(text("HeroMiners · Pearl",18,INK,true));gap(pool,12);miningText=text("公开矿池数据加载中",13,MUTED,false);pool.addView(miningText);gap(pool,12);
-        pool.addView(button("刷新矿池统计",GREEN,PALE,v->refreshMining()));gap(pool,8);pool.addView(button("打开矿池网站",GREEN,WHITE,v->open("https://pearl.herominers.com")));content.addView(pool);gap(content,18);
-        LinearLayout calc=card(PALE);calc.addView(text("收益情景计算",18,GREEN,true));gap(calc,8);calc.addView(text("综合预估 PRL 日产出、矿池费、电费与租金，查看每天、30 天和 90 天的净收益及盈亏平衡币价。",12,INK,false));gap(calc,12);
-        calc.addView(button("挖矿收益计算",WHITE,GREEN,v->publicTools.profit(price!=null&&price.isFresh(System.currentTimeMillis()/1000)?price.cny:null)));content.addView(calc);gap(content,12);
-        content.addView(text("仅查询矿池统计。本应用不在手机上挖矿，不控制矿机，不自动估算未来产出。",11,MUTED,false));updateMining();refreshMining();
+        heading("矿业工作台","矿池动态与收益情景，一目了然。");
+        LinearLayout pool=card(WHITE);LinearLayout title=row();weighted(title,text("HeroMiners",18,INK,true));TextView coin=text("PEARL · PRL",11,GREEN,true);coin.setPadding(dp(9),dp(5),dp(9),dp(5));coin.setBackground(background(PALE,0,8));title.addView(coin);pool.addView(title);gap(pool,18);
+        miningValues=new TextView[6];String[] labels={"矿池总算力","全网算力","占全网比例","矿工 / 工作器","矿池费率","主网高度"};
+        for(int r=0;r<3;r++){LinearLayout metrics=row();for(int c=0;c<2;c++){int i=r*2+c;LinearLayout cell=column();cell.setPadding(dp(12),dp(12),dp(10),dp(12));cell.setBackground(background(BG,0,12));cell.addView(text(labels[i],11,MUTED,false));gap(cell,9);miningValues[i]=text("—",18,INK,true);miningValues[i].setMaxLines(1);miningValues[i].setAutoSizeTextTypeUniformWithConfiguration(13,18,1,android.util.TypedValue.COMPLEX_UNIT_SP);cell.addView(miningValues[i]);weighted(metrics,cell);if(c==0)between(metrics,10);}pool.addView(metrics);gap(pool,10);}
+        miningText=text("公开矿池数据加载中",11,MUTED,false);pool.addView(miningText);gap(pool,14);LinearLayout buttons=row();weighted(buttons,button("刷新矿池统计",GREEN,PALE,v->refreshMining()));between(buttons,10);weighted(buttons,button("打开矿池网站",INK,BG,v->open("https://pearl.herominers.com")));pool.addView(buttons);content.addView(pool);gap(content,16);
+        LinearLayout calc=card(PALE);LinearLayout caption=row();ImageView symbol=new ImageView(this);symbol.setImageDrawable(PearlDesign.icon(this,"calculator",GREEN,24));caption.addView(symbol,new LinearLayout.LayoutParams(dp(30),dp(30)));TextView name=text("收益情景计算",18,GREEN,true);name.setPadding(dp(8),0,0,0);caption.addView(name);calc.addView(caption);gap(calc,12);calc.addView(text("把电费、矿池费和租金算进去，查看每天与 30 / 90 天的净收益。",13,INK,false));gap(calc,16);calc.addView(button("挖矿收益计算",WHITE,GREEN,v->publicTools.profit(price!=null&&price.isFresh(System.currentTimeMillis()/1000)?price.cny:null)));content.addView(calc);gap(content,14);
+        content.addView(text("只读矿池统计，手机不参与挖矿。收益基于你填写的估计，不预测未来产出。",11,MUTED,false));updateMining();refreshMining();
     }
+
     private void refreshMining(){
         if(loadingMining)return;loadingMining=true;updateMining();
         executor.execute(()->{try{MiningApi.Stats result=new MiningApi().stats();ui(()->{miningStats=result;miningError="";loadingMining=false;updateMining();});}
@@ -316,17 +301,16 @@ public final class MainActivity extends Activity {
         if(miningText==null)return;
         if(miningStats==null){miningText.setText(loadingMining?"公开矿池数据加载中":miningError.isEmpty()?"尚未获取数据":miningError);return;}
         MiningApi.Stats s=miningStats;boolean old=System.currentTimeMillis()/1000-s.receivedAt>180;
-        miningText.setText(getString(R.string.mining_stats,MiningApi.rate(s.hashRate),MiningApi.rate(s.networkHashRate),s.share().setScale(2,RoundingMode.HALF_UP).toPlainString(),s.miners,s.workers,s.fee.toPlainString(),s.height,priceTime(s.receivedAt),old?" · 数据已过期":"",loadingMining?" · 刷新中":"",!miningError.isEmpty()?"\n刷新失败："+miningError:""));
+        String[] values={MiningApi.rate(s.hashRate),MiningApi.rate(s.networkHashRate),s.share().setScale(2,RoundingMode.HALF_UP).toPlainString()+"%",s.miners+" / "+s.workers,s.fee.toPlainString()+"%","#"+s.height};
+        if(miningValues!=null)for(int i=0;i<values.length;i++)miningValues[i].setText(values[i]);
+        String state="接收 "+priceTime(s.receivedAt)+(old?" · 数据已过期":"")+(loadingMining?" · 刷新中":"")+(!miningError.isEmpty()?"\n刷新失败："+miningError:"")+"\n统计包含普通与 Solo 模式。";miningText.setText(state);
     }
 
     private void changeCurrency(String value) { currency = value; preferences.edit().putString("currency", value).apply(); render(); }
-    private void renderNavigation() {
-        navigation.removeAllViews(); String[] pages = {"wallet", "market", "mining", "activity", "settings"};
-        String[] titles = {"◉\n钱包", "⌁\n行情", "◇\n挖矿", "⇄\n记录", "⚙\n设置"};
-        for (int i = 0; i < pages.length; i++) {
-            String target = pages[i]; Button b = button(titles[i], page.equals(target) ? GREEN : MUTED, page.equals(target) ? PALE : WHITE,
-                    v -> { if (!page.equals(target)) { page = target; render(); } }); b.setTextSize(11); b.setGravity(Gravity.CENTER); weighted(navigation, b);
-        }
+    private void renderNavigation(){
+        navigation.removeAllViews();String[] pages={"wallet","market","mining","activity","settings"};String[] titles={"钱包","行情","挖矿","记录","设置"};
+        for(int i=0;i<pages.length;i++){String target=pages[i];boolean selected=page.equals(target);LinearLayout item=column();item.setGravity(Gravity.CENTER);item.setPadding(0,dp(5),0,dp(5));item.setBackground(PearlDesign.touch(this,selected?PALE:WHITE,0,14));item.setOnClickListener(v->{if(!page.equals(target)){page=target;render();}});
+            ImageView icon=new ImageView(this);icon.setImageDrawable(PearlDesign.icon(this,target,selected?GREEN:MUTED,22));item.addView(icon,new LinearLayout.LayoutParams(dp(24),dp(24)));gap(item,5);TextView label=text(titles[i],11,selected?GREEN:MUTED,selected);label.setGravity(Gravity.CENTER);item.addView(label);weighted(navigation,item);}
     }
 
     private void updateLabels() {
@@ -334,11 +318,12 @@ public final class MainActivity extends Activity {
             networkText.setText(status != null && networkError.isEmpty() ? (status.synced ? "●" : "○") + "  主网 · #" + status.height : "○  主网 · " + (loadingStatus ? "连接中" : "暂未连接"));
         }
         if (balanceText != null) {
-            balanceText.setText(account == null ? "— PRL" : PearlAmount.format(account.balance) + " PRL");
+            balanceText.setText(hideBalances?"•••• PRL":account==null?"— PRL":PearlAmount.format(account.balance)+" PRL");
+            balanceText.setContentDescription(hideBalances?"已确认余额已隐藏":"已确认余额 "+(account==null?"尚未获取":PearlAmount.format(account.balance)+" PRL"));
             String value = account == null ? "创建钱包后查看余额" : "已确认余额";
             if (account != null && price != null && price.isFresh(System.currentTimeMillis() / 1000) && priceError.isEmpty()) value = "≈ " + PearlAmount.fiat(account.balance, price.value(price.displayCurrency(currency)), price.displayCurrency(currency));
             if (account != null && account.unconfirmed.signum() != 0) value += " · 未确认 " + PearlAmount.format(account.unconfirmed) + " PRL";
-            fiatText.setText(value);
+            fiatText.setText(hideBalances?"资产金额已隐藏":value);
             balanceStatus.setText(address.isEmpty() ? "创建或恢复后即可收款" : !accountError.isEmpty() ? "数据刷新失败 · " + accountError
                     : account == null ? "本地钱包 · " + (loadingAccount ? "加载中" : "未获取数据") : "密钥已锁定 · 更新于 " + time(accountUpdatedAt));
         }
@@ -348,7 +333,8 @@ public final class MainActivity extends Activity {
             priceText.setText(amount == null ? "—" : (actual.equals("cny") ? "¥" : actual.equals("usd") ? "$" : "") + amount.setScale(4, RoundingMode.HALF_UP).toPlainString() + (actual.equals("usdt") ? " USDT" : ""));
             boolean fresh = price != null && price.isFresh(System.currentTimeMillis() / 1000);
             changeText.setText(price == null ? "—" : (price.change24h.signum() >= 0 ? "+" : "") + price.change24h.setScale(2, RoundingMode.HALF_UP) + "%  24h");
-            changeText.setTextColor(price != null && price.change24h.signum() < 0 ? Color.rgb(165, 75, 68) : GREEN);
+            changeText.setTextColor(price!=null&&price.change24h.signum()<0?PearlDesign.RED:GREEN);
+            changeText.setBackground(background(price!=null&&price.change24h.signum()<0?Color.rgb(252,235,236):PALE,0,8));
             String status = price == null ? priceState : price.source + " · " + (cachedPrice ? "上次行情 · " : "")
                     + (!fresh ? "数据已过期 · " : "") + priceState + " · " + (price.usdt != null ? "接收 " : "更新 ") + priceTime(price.updatedAt);
             if (price != null && !actual.equals(currency)) status += "\n计价汇率暂不可用，显示 USDT 报价";
@@ -470,12 +456,12 @@ public final class MainActivity extends Activity {
         if(!requestedAmount.isEmpty()){gap(receive,8);receive.addView(button("复制收款请求",GREEN,WHITE,v->copy("Pearl Pocket 收款请求",payload)));}
         ScrollView scroll=new ScrollView(this);scroll.addView(receive);
         if(receiveDialog!=null)receiveDialog.dismiss();
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("Pearl 主网收款地址").setView(scroll).setNegativeButton("关闭", null).create();receiveDialog=d;d.show();d.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Pearl 主网收款地址").setView(scroll).setNegativeButton("关闭", null).create();receiveDialog=d;d.show();PearlDesign.dialog(d);
     }
     private void requestAmount(){
         if(receiveDialog!=null)receiveDialog.dismiss();
         EditText amount=new EditText(this);amount.setHint("请求金额（PRL）");amount.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("指定收款金额").setView(amount).setNegativeButton("取消",null).setPositiveButton("生成收款请求",null).create();receiveDialog=d;d.show();d.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("指定收款金额").setView(amount).setNegativeButton("取消",null).setPositiveButton("生成收款请求",null).create();receiveDialog=d;d.show();PearlDesign.dialog(d);
         d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{String n=PearlAmount.format(PearlAmount.parsePositivePrl(amount.getText().toString()));d.dismiss();receive(n);}catch(Exception e){amount.setError(e.getMessage());}});
     }
     private void copy(String title,String value){((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText(title,value));Toast.makeText(this,"已复制",Toast.LENGTH_SHORT).show();}

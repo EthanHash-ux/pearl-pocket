@@ -46,19 +46,18 @@ final class WalletFlow {
     String lastResult() { return lastResult; }
     boolean backedUp() { return activity.getSharedPreferences("backup_status", Activity.MODE_PRIVATE).getBoolean(host.address(), false); }
     private LinearLayout form() {
-        LinearLayout view = new LinearLayout(activity); view.setOrientation(LinearLayout.VERTICAL);
-        int pad = (int)(24 * activity.getResources().getDisplayMetrics().density); view.setPadding(pad, pad/2, pad, pad/2); return view;
+        return PearlDesign.form(activity);
     }
-    private TextView label(String s) { TextView t = new TextView(activity); t.setText(s); t.setTextSize(14); t.setPadding(0,8,0,12); return t; }
+    private TextView label(String s) { return PearlDesign.note(activity,s); }
     private EditText field(String hint, boolean password) {
         EditText e = new EditText(activity); e.setHint(hint); e.setSingleLine(password);
         e.setInputType(InputType.TYPE_CLASS_TEXT | (password ? InputType.TYPE_TEXT_VARIATION_PASSWORD : InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS));
         e.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
-        e.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING); return e;
+        e.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);PearlDesign.input(e); return e;
     }
     private void show(AlertDialog d) {
         if (dialog != null) dialog.dismiss(); dialog = d; d.show();
-        if (d.getWindow() != null) d.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        PearlDesign.dialog(d);
     }
     void notice(String title, String message) {
         if (!active || activity.isDestroyed()) return;
@@ -208,11 +207,15 @@ final class WalletFlow {
     private void showBackup(String words) {
         String[] list = words.split(" "); LinearLayout view = form();
         view.addView(label("按顺序抄写到纸上并离线保管。持有这些词的人可以转走资金。请勿截图、复制到剪贴板或发给他人。"));
-        TextView text = label(""); StringBuilder display = new StringBuilder();
-        for (int i = 0; i < list.length; i++) display.append(i+1).append(". ").append(list[i]).append((i%3 == 2) ? "\n" : "     ");
-        text.setText(display.toString()); text.setTextIsSelectable(false); text.setTextSize(15); view.addView(text);
-        AlertDialog d = new AlertDialog.Builder(activity).setTitle("离线助记词备份").setView(view).setNegativeButton("稍后备份", null).setPositiveButton("已抄好，验证备份", null).create();
-        show(d); d.setOnDismissListener(v -> { text.setText(""); });
+        java.util.List<TextView> cells=new java.util.ArrayList<>();LinearLayout row=null;
+        for(int i=0;i<list.length;i++){
+            if(i%3==0){row=new LinearLayout(activity);view.addView(row);}
+            TextView cell=PearlDesign.text(activity,(i+1)+". "+list[i],13,PearlDesign.INK,true);cell.setTypeface(android.graphics.Typeface.MONOSPACE);cell.setPadding(10,18,8,18);cell.setTextIsSelectable(false);cell.setBackground(PearlDesign.surface(activity,PearlDesign.BG,0,10));
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-2,1);p.setMargins(4,6,4,6);row.addView(cell,p);cells.add(cell);
+        }
+        android.widget.ScrollView scroll=new android.widget.ScrollView(activity);scroll.addView(view);
+        AlertDialog d = new AlertDialog.Builder(activity).setTitle("离线助记词备份").setView(scroll).setNegativeButton("稍后备份", null).setPositiveButton("已抄好，验证备份", null).create();
+        show(d); d.setOnDismissListener(v -> { for(TextView cell:cells)cell.setText(""); });
         d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> { d.dismiss(); verifyBackup(list); });
     }
     private void verifyBackup(String[] words) {
@@ -241,10 +244,10 @@ final class WalletFlow {
         EditText to = field("完整 Pearl 主网收款地址", false), amount = field("金额（PRL）", false);
         to.setText(draftAddress);amount.setText(draftAmount);
         amount.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL); view.addView(to); view.addView(amount);
-        android.widget.Button scan=new android.widget.Button(activity);scan.setText("扫描收款二维码");view.addView(scan);
+        android.widget.Button scan=PearlDesign.button(activity,"扫描收款二维码",PearlDesign.TEAL,PearlDesign.PALE,null);scan.setCompoundDrawables(PearlDesign.icon(activity,"scan",PearlDesign.TEAL,19),null,null,null);view.addView(scan);
         scan.setOnClickListener(v->{scanAddress=to.getText().toString();scanAmount=amount.getText().toString();dismissForScan();activity.startActivityForResult(new Intent(activity,QrScannerActivity.class),QrScannerActivity.REQUEST);});
-        android.widget.Button book=new android.widget.Button(activity);book.setText("从地址簿选择");view.addView(book);book.setOnClickListener(v->publicTools.addressBook(to::setText));
-        android.widget.Button save=new android.widget.Button(activity);save.setText("保存地址到联系人");view.addView(save);save.setOnClickListener(v->{try{publicTools.saveContact(PearlAddress.normalize(to.getText().toString()));}catch(Exception e){to.setError(error(e));}});
+        android.widget.Button book=PearlDesign.button(activity,"从地址簿选择",PearlDesign.INK,PearlDesign.BG,null);view.addView(book);book.setOnClickListener(v->publicTools.addressBook(to::setText));
+        android.widget.Button save=PearlDesign.button(activity,"保存地址到联系人",PearlDesign.MUTED,PearlDesign.WHITE,null);view.addView(save);save.setOnClickListener(v->{try{publicTools.saveContact(PearlAddress.normalize(to.getText().toString()));}catch(Exception e){to.setError(error(e));}});
         AlertDialog d = new AlertDialog.Builder(activity).setTitle("发送 PRL").setView(view).setNegativeButton("取消", null).setPositiveButton("预览转账", null).create();
         show(d); d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             if (busy) return;

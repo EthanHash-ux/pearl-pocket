@@ -33,15 +33,16 @@ def main():
     output = run('shell', 'am', 'instrument', '-w', '-e', 'class', 'ai.pearl.wallet.WalletUiTest',
                  'ai.pearl.wallet.test/androidx.test.runner.AndroidJUnitRunner', timeout=360).stdout
     (project/'artifacts/ui-smoke-run.txt').write_text(output)
-    assert 'OK (4 tests)' in output and 'FAILURES' not in output, 'UI checks failed; inspect ui-smoke-run.txt'
-    report = {'result': 'PASS', 'version': '0.4.0', 'device': args.serial,
+    assert 'OK (5 tests)' in output and 'FAILURES' not in output, 'UI checks failed; inspect ui-smoke-run.txt'
+    report = {'result': 'PASS', 'version': '0.5.0', 'device': args.serial,
               'checked': ['24-word creation and backup verification', '24-word bulk restore preserves address',
                           '12-word clipboard restore and count selection', 'spelling/checksum block continuation',
                           '15/18/21-word count selection, bulk/clipboard restore and encrypted vault reload',
                           'derived address confirmation', 'new password after device PIN', 'wrong password rejected',
                           'background closes recovery editor', 'receive QR', 'actual PRL-USDT WSS snapshot',
                           'stop publishes no more quotes', 'resume obtains new live snapshot', 'USDT display', '7-day chart',
-                          'local contact save and recipient selection', 'amount payment QR exact-grain clipboard',
+                          'balance privacy survives restart and masks accessibility amounts', 'transaction filter navigation',
+                          'contact name/address search and case-insensitive matching', 'local contact save and recipient selection', 'amount payment QR exact-grain clipboard',
                           'local QR image decoding through document-picker result and recipient/amount prefilling',
                           'one-shot price alert configuration and removal', 'mining cost and net-profit UI'],
               'mainnet_funds_used': False, 'private_data_recorded': False}

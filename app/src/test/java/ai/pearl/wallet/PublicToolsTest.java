@@ -52,6 +52,12 @@ public class PublicToolsTest {
         Memory store=new Memory();PriceAlerts alerts=new PriceAlerts(store);alerts.add("1",true);store.fail=true;
         assertThrows(IllegalStateException.class,()->alerts.claim(new BigDecimal("2"),100,100,true));store.fail=false;assertTrue(alerts.active());assertEquals(1,alerts.claim(new BigDecimal("2"),101,101,true).size());
     }
+    @Test public void rearmingAnAlertPersistsTheSameThresholdAndAllowsOneMoreClaim()throws Exception{
+        Memory store=new Memory();PriceAlerts alerts=new PriceAlerts(store);PriceAlerts.Alert a=alerts.add("2",true);assertEquals(1,alerts.claim(new BigDecimal("3"),100,100,true).size());
+        assertFalse(alerts.active());alerts.rearm(a.id);PriceAlerts.Alert restored=new PriceAlerts(store).list().get(0);assertEquals(a.id,restored.id);assertEquals(0,restored.firedAt);assertTrue(restored.enabled);assertEquals(0,a.target.compareTo(restored.target));
+        assertEquals(1,alerts.claim(new BigDecimal("3"),101,101,true).size());assertTrue(alerts.claim(new BigDecimal("3"),102,102,true).isEmpty());
+        alerts.remove(a.id);assertThrows(IllegalArgumentException.class,()->alerts.rearm(a.id));
+    }
     @Test public void profitIncludesPoolFeePowerRentAndBreakEvenPrice(){
         MiningProfit p=new MiningProfit("10","5","1000","0.5","2","3");
         assertEquals(0,new BigDecimal("49").compareTo(p.revenue));assertEquals(0,new BigDecimal("12").compareTo(p.electricity));assertEquals(0,new BigDecimal("34").compareTo(p.net));
