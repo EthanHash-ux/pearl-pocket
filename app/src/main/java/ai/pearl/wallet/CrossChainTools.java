@@ -13,6 +13,9 @@ import android.text.InputType;
 import android.widget.*;
 import java.math.*;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.concurrent.*;
 import java.util.function.*;
 import org.json.*;
@@ -144,6 +147,12 @@ final class CrossChainTools {
     Toast.makeText(activity, "已复制", Toast.LENGTH_SHORT).show();
   }
 
+  private static String readTime() {
+    return DateTimeFormatter.ofPattern("MM-dd HH:mm:ss", Locale.CHINA)
+        .withZone(ZoneId.systemDefault())
+        .format(Instant.now());
+  }
+
   private void open(String url) {
     try {
       activity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
@@ -227,7 +236,7 @@ final class CrossChainTools {
               bridgeState.setText(
                   (s.paused ? "已暂停" : "API 报告运行中")
                       + " · 读取 "
-                      + Instant.now()
+                      + readTime()
                       + "\n转入 100 PRL：桥费 "
                       + PearlAmount.format(q.fee)
                       + " PRL → "
@@ -262,8 +271,8 @@ final class CrossChainTools {
                     + m.mark
                     + " · 指数 "
                     + m.index
-                    + "\n固定市场 4097 · 读取 "
-                    + Instant.now()
+                    + "\nUSDC 结算 · 更新 "
+                    + readTime()
                     + "\n"
                     + line);
           };
@@ -534,7 +543,7 @@ final class CrossChainTools {
         () -> {
           BridgeApi.Transfer t = bridge.transfer(e.mint, e.hash);
           return () -> {
-            state.setText(t.label(e.mint) + "\n若桥尚未索引或未知，不能据此再次转入。查询时间 " + Instant.now());
+            state.setText(t.label(e.mint) + "\n若桥尚未索引或未知，不能据此再次转入。查询时间 " + readTime());
             if (!t.otherHash.isEmpty())
               f.addView(
                   button(
@@ -808,8 +817,7 @@ final class CrossChainTools {
                 + "%，每路线其它成本 "
                 + money(fixed)
                 + " USDT。买入按币扣费预留，卖出按报价币扣费。gas 与提币预算由你填入，未自动核验充值提现、实际费用与库存。"));
-    TextView stale =
-        note("读取完成 " + Instant.now() + " · 盘口是不同服务先后取得的快照。此结果不能在桥等待期间锁定。路线执行需自己在两端确认。");
+    TextView stale = note("读取完成 " + readTime() + " · 盘口是不同服务先后取得的快照。此结果不能在桥等待期间锁定。路线执行需自己在两端确认。");
     f.addView(stale);
     f.addView(button("重新填写并报价", () -> calculator(false)));
     show("跨链路线成本", f);
@@ -869,7 +877,7 @@ final class CrossChainTools {
     TextView stale =
         note(
             "读取完成 "
-                + Instant.now()
+                + readTime()
                 + " · 永续没有兑换或保底平仓承诺，价差可能扩大；需要分别预置现货和 USDC 保证金。桥不是对冲订单，WPRL 不是 Lighter"
                 + " 保证金。不会自动开仓或按价差发送资金。");
     f.addView(stale);

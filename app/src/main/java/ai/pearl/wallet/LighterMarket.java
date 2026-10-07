@@ -89,7 +89,9 @@ final class LighterMarket {
     if (rate.signum() < 0 || rate.compareTo(BigDecimal.ONE) > 0 || value.signum() < 0)
       throw new IllegalArgumentException("资金费记录超出范围");
     return "最近已结算小时 "
-        + java.time.Instant.ofEpochSecond(time)
+        + java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm", java.util.Locale.CHINA)
+            .withZone(java.time.ZoneId.systemDefault())
+            .format(java.time.Instant.ofEpochSecond(time))
         + "\n"
         + (direction.equals("long") ? "多头付费" : "空头付费")
         + " · "
