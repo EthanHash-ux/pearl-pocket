@@ -1,0 +1,12 @@
+{
+  "merchant": "Your PRL inference service",
+  "account_xpub": "REPLACE_WITH_YOUR_OFFLINE_ACCOUNT_XPUB",
+  "models": [
+    {
+      "id": "REPLACE_WITH_YOUR_PROVIDER_MODEL_ID",
+      "price_per_request_units": "10000",
+      "max_tokens": 512,
+      "max_input_bytes": 4000
+    }
+  ]
+}

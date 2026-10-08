@@ -91,6 +91,8 @@ type Request struct {
 	Ethereum  EthereumPlan `json:"ethereum"`
 	Trade     TradePlan    `json:"trade"`
 	TradeAuth TradeAuth    `json:"tradeAuth"`
+	Xpub      string       `json:"xpub"`
+	Index     uint32       `json:"index"`
 }
 type Identity struct {
 	Address  string `json:"address"`
@@ -351,14 +353,17 @@ func Plan(p Payment) (Quote, error) {
 	return Quote{p, fee, change, vsize(tx), digest(tx), time.Now().Unix() + 300}, nil
 }
 func Sign(b []byte, q Quote) (Signed, error) {
-	if q.Expires < time.Now().Unix() || q.Expires > time.Now().Unix()+310 {
-		return Signed{}, errors.New("转账预览已过期，请重新确认")
-	}
 	key, addr, e := keyFor(b)
 	if e != nil {
 		return Signed{}, e
 	}
 	defer key.Zero()
+	return signWithKey(key, addr, q)
+}
+func signWithKey(key *btcec.PrivateKey, addr string, q Quote) (Signed, error) {
+	if q.Expires < time.Now().Unix() || q.Expires > time.Now().Unix()+310 {
+		return Signed{}, errors.New("转账预览已过期，请重新确认")
+	}
 	if addr != q.Payment.From {
 		return Signed{}, errors.New("密钥与钱包地址不匹配")
 	}
@@ -407,6 +412,10 @@ func Execute(input string) (output string) {
 		return `{"error":"请求格式无效"}`
 	}
 	switch r.Action {
+	case "invoiceaddress":
+		var address string
+		address, e = InvoiceAddress(r.Xpub, r.Index)
+		result = map[string]string{"address": address}
 	case "tradeintent":
 		result, e = TradeIntent(r.Trade)
 	case "tradeverify":

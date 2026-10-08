@@ -37,6 +37,8 @@ func main() {
 		_ = tx.Serialize(&raw)
 		p.UTXOs = append(p.UTXOs, walletcore.UTXO{TxID: tx.TxHash().String(), Vout: 0, Raw: hex.EncodeToString(raw.Bytes()), Confirmations: 10})
 	}
-	raw, _ := json.MarshalIndent(map[string]any{"payment": p, "entropy": a.Entropy}, "", "  ")
+	merchant, _ := walletcore.MerchantAccountPublic(make([]byte, 16))
+	invoiceAddress, _ := walletcore.InvoiceAddress(merchant, 1)
+	raw, _ := json.MarshalIndent(map[string]any{"payment": p, "entropy": a.Entropy, "merchant_account_xpub": merchant, "invoice_address_1": invoiceAddress}, "", "  ")
 	fmt.Println(string(raw))
 }

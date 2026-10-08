@@ -265,6 +265,13 @@ final class WalletFlow {
         busy=true;int token=generation;
         worker.execute(()->{try{trade.recheck(activity,spotApi);JSONObject payment=api.payment(address(),trade.deposit,trade.quantity);JSONObject quote=NativeCore.call(new JSONObject().put("action","plan").put("payment",payment));ui(token,()->review(quote,null,trade));}catch(Exception e){ui(token,()->notice("无法预览现货充值",error(e)));}finally{busy=false;}});
     }
+    void inferencePay(InferencePayment invoice) {
+        if(!exists()||busy||authWaiting)return;
+        if(!backedUp()){notice("先完成离线备份","验证助记词备份后再支付推理服务。");return;}
+        try{if(!slot.equals(invoice.slot)||!address().equals(invoice.payer))throw new IllegalArgumentException("付款钱包已切换");if(pending.load()!=null){pendingStatus();return;}}catch(Exception e){notice("无法支付推理账单",error(e));return;}
+        busy=true;int token=generation;
+        worker.execute(()->{try{invoice.recheck();JSONObject payment=api.payment(address(),invoice.recipient,invoice.amount);JSONObject quote=NativeCore.call(new JSONObject().put("action","plan").put("payment",payment));ui(token,()->review(quote,null,null,invoice));}catch(Exception e){ui(token,()->notice("无法预览 AI 付款",error(e)));}finally{busy=false;}});
+    }
     private void showBackup(String words) {
         String[] list = words.split(" "); LinearLayout view = form();
         view.addView(label("按顺序抄写到纸上并离线保管。持有这些词的人可以转走资金。请勿截图、复制到剪贴板或发给他人。"));
@@ -362,12 +369,16 @@ final class WalletFlow {
         review(quote,bridge,null);
     }
     private void review(JSONObject quote,BridgeApi.MintPlan bridge,SpotTradeStore.Deposit trade) {
+        review(quote,bridge,trade,null);
+    }
+    private void review(JSONObject quote,BridgeApi.MintPlan bridge,SpotTradeStore.Deposit trade,InferencePayment invoice) {
         try {
             JSONObject payment = quote.getJSONObject("payment");
             if (!address().equals(payment.getString("from"))) throw new IllegalArgumentException("付款钱包与转账预览不一致，请重新操作");
             String message = "付款钱包 · " + host.name() + "\n" + address() + "\n\n收款地址\n" + payment.getString("to") + "\n\n金额  " + PearlAmount.format(new BigInteger(payment.getString("amount"))) + " PRL\n手续费  " + PearlAmount.format(new BigInteger(quote.getString("fee"))) + " PRL\n合计  " + PearlAmount.format(new BigInteger(payment.getString("amount")).add(new BigInteger(quote.getString("fee")))) + " PRL"+(payment.optBoolean("sweep",false)?"\n发送全部可用余额（已扣手续费），不生成找零。未确认与未成熟奖励不参与。":"")+"\n\n预览有效期 5 分钟。确认后在手机签名并提交到 Pearl 主网。";
             if(bridge!=null)message += "\n\n"+bridge.summary()+"\n签名前再次核对桥报价。核对后 2 分钟内完成验证；桥状态仍可能随后变化。";
             if(trade!=null)message += "\n\n充值到 pearl-trade 平台账户\n"+trade.eth+"\n充值后由平台控制 PRL。通常等待 6 个 Pearl 确认再记入可交易余额；这是充值，之后须另行确认卖单和 USDC 提现。";
+            if(invoice!=null)message += "\n\n"+invoice.summary();
             final long[] bridgeCheckedAt={0};
             Runnable approve=()->unlock("确认并发送这笔转账", entropy -> {
                         if (pending.load() != null) throw new IllegalArgumentException("已有交易等待确认");
@@ -376,27 +387,31 @@ final class WalletFlow {
                             if(!bridge.deposit.equals(payment.getString("to"))||!bridge.quote.amount.toString().equals(payment.getString("amount")))throw new IllegalArgumentException("跨链交易与已确认报价不一致");
                         }
                         if(trade!=null){if(bridgeCheckedAt[0]<=0||android.os.SystemClock.elapsedRealtime()-bridgeCheckedAt[0]>120_000||!trade.deposit.equals(payment.getString("to"))||!trade.quantity.toString().equals(payment.getString("amount")))throw new IllegalArgumentException("现货充值核对已过期或金额不一致");}
+                        if(invoice!=null){if(bridgeCheckedAt[0]<=0||android.os.SystemClock.elapsedRealtime()-bridgeCheckedAt[0]>120_000||System.currentTimeMillis()/1000>=invoice.expires||!invoice.recipient.equals(payment.getString("to"))||!invoice.amount.toString().equals(payment.getString("amount")))throw new IllegalArgumentException("推理账单已过期或付款条款不一致");}
                         JSONObject signed = NativeCore.sign(entropy, quote);
                         signed.put("to", payment.getString("to")).put("amount", payment.getString("amount"));
                         if(bridge!=null){new BridgeBook(PublicStore.of(activity)).save(true,signed.getString("txid"),bridge.eth);signed.put("bridgeEth",bridge.eth);}
                         if(trade!=null){new SpotTradeStore(activity,slot,trade.eth,address()).depositSent(signed.getString("txid"),trade.deposit,payment.getString("amount"));signed.put("spotTrade",true);}
+                        if(invoice!=null)signed.put("inferenceInvoice",invoice.invoiceId);
                         pending.save(signed);
+                        if(invoice!=null)invoice.signed(signed.getString("txid"));
                         // Network submission is queued after unlock's finally wipes entropy/password.
                         int token = generation; worker.execute(() -> submit(signed, token));
                     });
-            show(new AlertDialog.Builder(activity).setTitle(bridge==null?"确认转账":"确认 PRL 转入跨链桥").setMessage(message).setNegativeButton("取消", null)
+            show(new AlertDialog.Builder(activity).setTitle(invoice!=null?"确认 PRL 支付 AI 账单":bridge==null?"确认转账":"确认 PRL 转入跨链桥").setMessage(message).setNegativeButton("取消", null)
                     .setPositiveButton("验证并发送", (d,w) -> {
-                        if(bridge==null&&trade==null){approve.run();return;}
+                        if(bridge==null&&trade==null&&invoice==null){approve.run();return;}
                         if(busy||authWaiting)return;busy=true;int token=generation;
-                        worker.execute(()->{try{if(bridge!=null)new BridgeApi().recheck(bridge,new BridgeBook(PublicStore.of(activity)));else trade.recheck(activity,spotApi);
+                        worker.execute(()->{try{if(invoice!=null)invoice.recheck();else if(bridge!=null)new BridgeApi().recheck(bridge,new BridgeBook(PublicStore.of(activity)));else trade.recheck(activity,spotApi);
                             ui(token,()->{busy=false;bridgeCheckedAt[0]=android.os.SystemClock.elapsedRealtime();approve.run();});
-                        }catch(Exception e){ui(token,()->notice("跨链核对未通过",error(e)));}finally{busy=false;}});
+                        }catch(Exception e){ui(token,()->notice("付款条款核对未通过",error(e)));}finally{busy=false;}});
                     }).create());
         } catch (Exception e) { notice("预览失败", error(e)); }
     }
     private void submit(JSONObject signed, int token) {
         busy = true;
         try {
+            ensureInferenceRecord(signed);
             String id = api.broadcast(signed); pending.clear(); lastResult = "已提交 · " + id;
             ui(token, () -> { host.changed(); notice(signed.has("bridgeEth")?"PRL 转入交易已提交":"交易已提交", "等待主网确认。\n\n交易 ID\n" + id+(signed.has("bridgeEth")?"\n\nPRL 转账确认后仍需等待桥铸造 WPRL。请在行情的跨链进度查看；此次提交不代表跨链完成。":"")); });
         } catch (Exception e) {
@@ -417,13 +432,16 @@ final class WalletFlow {
                         busy = true; int token = generation;
                         worker.execute(() -> {
                             try {
-                                if (api.transactionKnown(id)) { pending.clear(); lastResult = "主网已接收 · " + id; ui(token, () -> { host.changed(); notice("主网已接收", id); }); }
+                                if (api.transactionKnown(id)) { ensureInferenceRecord(signed);pending.clear(); lastResult = "主网已接收 · " + id; ui(token, () -> { host.changed(); notice("主网已接收", id); }); }
                                 else ui(token, () -> notice("仍待确认", "保留原交易，可稍后重查或重发同一交易。"));
                             } catch (Exception e) { ui(token, () -> notice("仍待确认", "暂时无法确认接收状态。原交易仍保留。\n" + error(e))); }
                             finally { busy = false; }
                         });
                     }).create());
         } catch (Exception e) { notice("读取失败", error(e)); }
+    }
+    private void ensureInferenceRecord(JSONObject signed)throws Exception{
+        if(signed.has("inferenceInvoice"))new InferenceStore(activity,slot,address()).sent(signed.getString("inferenceInvoice"),signed.getString("txid"));
     }
     synchronized void resume() { active = true; recoveryTimeout.removeCallbacks(expireRecovery); }
     synchronized void pause() {

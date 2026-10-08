@@ -62,6 +62,7 @@ public class WalletUiTest {
         new android.util.AtomicFile(new File(wallet.getParentFile(),"pending-ethereum.json")).delete();
         new android.util.AtomicFile(new File(wallet.getParentFile(),"ethereum-address.json")).delete();
         new android.util.AtomicFile(new File(wallet.getParentFile(),"spot-trade.json")).delete();
+        new android.util.AtomicFile(new File(wallet.getParentFile(),"inference.enc")).delete();
     }
     private List<String> backup(){
         text("离线助记词备份");List<String> result=new ArrayList<>();

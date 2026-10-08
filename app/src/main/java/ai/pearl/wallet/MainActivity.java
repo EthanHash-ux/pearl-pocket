@@ -76,6 +76,7 @@ public final class MainActivity extends Activity {
     private CrossChainTools crossChainTools;
     private DeFiTools deFiTools;
     private SpotTradeTools spotTradeTools;
+    private InferenceTools inferenceTools;
     private FortuneTools fortuneTools; private MiningTools miningTools;private WatchTools watchTools;private HistoryTools historyTools;private String observedAddress="";
     private MiningApi.Stats miningStats;
     private TextView miningText;
@@ -118,6 +119,7 @@ public final class MainActivity extends Activity {
         crossChainTools=new CrossChainTools(this,()->address,this::observing,()->hideBalances,plan->{if(observing())walletFlow.notice("观察地址不能发送","请先切换到手机钱包。");else walletFlow.bridge(plan);});
         deFiTools = new DeFiTools(this, () -> walletFlow, () -> walletSlot, () -> walletCatalog.name(walletSlot), this::observing, () -> hideBalances);
         spotTradeTools = new SpotTradeTools(this, () -> walletFlow, () -> walletSlot, () -> walletCatalog.name(walletSlot), this::observing, () -> hideBalances);
+        inferenceTools = new InferenceTools(this, () -> walletFlow, () -> walletSlot, this::observing, () -> hideBalances);
         loadWallet();if(state==null)selectReceiptAddress(getIntent());
         readPriceCache();
         marketFeed = new MarketFeed(api, new MarketFeed.Listener() {
@@ -233,9 +235,23 @@ public final class MainActivity extends Activity {
         }else{
             LinearLayout wallet=card(WHITE);wallet.setPadding(dp(16),dp(16),dp(16),dp(16));LinearLayout addressRow=row();LinearLayout detail=column();detail.addView(text(observing()?"观察地址 · 只读":walletFlow.backedUp()?"钱包地址 · 已备份":"钱包地址 · 待备份",11,MUTED,false));gap(detail,6);TextView compact=text(PearlAddress.shortLabel(viewAddress()),13,INK,true);compact.setMaxLines(1);detail.addView(compact);weighted(addressRow,detail);addressRow.addView(iconButton("copy","复制钱包地址",GREEN,PALE,()->copy("Pearl 地址",viewAddress())),new LinearLayout.LayoutParams(dp(44),dp(44)));between(addressRow,6);addressRow.addView(iconButton("shield",observing()?"管理观察地址":walletFlow.backedUp()?"查看离线备份":"完成助记词备份",GREEN,BG,()->{if(observing())watchTools.show();else walletFlow.backup();}),new LinearLayout.LayoutParams(dp(44),dp(44)));wallet.addView(addressRow);content.addView(wallet);gap(content,18);
         }
+        LinearLayout buy=card(WHITE);buy.addView(text("购买 Pearl · PRL / USDT",18,INK,true));gap(buy,8);buy.addView(text("BigONE 现货购买入口 · 买入后可提现到本钱包。",13,MUTED,false));gap(buy,12);buy.addView(button("用 USDT 购买 PRL",WHITE,GREEN,v->buyWithUsdt()));content.addView(buy);gap(content,18);
+        LinearLayout ai=card(WHITE);ai.addView(text("AI 推理服务",18,INK,true));gap(ai,8);ai.addView(text("用 PRL 购买模型调用次数，查看账单、额度并试用 API。",13,MUTED,false));gap(ai,12);ai.addView(button("打开 AI 推理",WHITE,GREEN,v->inferenceTools.show()));content.addView(ai);gap(content,18);
         LinearLayout spot=card(WHITE);spot.addView(text("PRL / USDC 现货",18,INK,true));gap(spot,8);spot.addView(text("pearl-trade · Arbitrum USDC\n充值 PRL、本机签署买卖订单、提现并查询到账。",13,MUTED,false));gap(spot,12);spot.addView(button("买卖 PRL",WHITE,GREEN,v->spotTradeTools.show()));content.addView(spot);gap(content,18);
         LinearLayout defi=card(WHITE);defi.addView(text("DeFi 借贷流动性",18,INK,true));gap(defi,8);defi.addView(text("Aave V3 · Ethereum USDC\n查看存款利率与仓位，授权、存入和赎回。",13,MUTED,false));gap(defi,12);defi.addView(button("打开 DeFi",WHITE,GREEN,v->deFiTools.show()));content.addView(defi);gap(content,18);
         renderPriceCard(false);gap(content,22);LinearLayout heading=row();weighted(heading,text("最近交易",19,INK,true));Button all=button("查看全部",GREEN,BG,v->{page="activity";render();});all.setTextSize(12);heading.addView(all);content.addView(heading);gap(content,10);renderTransactions(3);
+    }
+
+    private void buyWithUsdt(){
+        LinearLayout f=PearlDesign.form(this);
+        f.addView(PearlDesign.note(this,"Pearl 的官方代币代码为 PRL。BigONE 的 PRL/USDT 现货交易在平台账户内完成，需要该平台的账户和可用 USDT。点击下方按钮将打开对应交易页；钱包不代保管交易所资金。"));
+        if(price!=null && price.usdt!=null && price.isFresh(System.currentTimeMillis()/1000))f.addView(PearlDesign.note(this,"参考现价 · "+price.usdt.toPlainString()+" USDT / PRL\n实际成交价格与费用以 BigONE 确认页为准。"));
+        if(!viewAddress().isEmpty()){
+            String target=viewAddress();f.addView(PearlDesign.note(this,"买入后选择提现 PRL，网络应为 Pearl 主网。先核对平台当前提现状态、最低金额和手续费，再输入完整地址。\n"+(observing()?"观察地址（请确认由你控制）":"当前钱包收款地址")+"\n"+target));
+            f.addView(button("复制 PRL 提现收款地址",GREEN,PALE,v->copy("Pearl 主网收款地址",target)));
+        } else f.addView(PearlDesign.note(this,"先创建手机钱包，即可获得买入 PRL 的提现收款地址。"));
+        f.addView(button("打开 BigONE · PRL/USDT",WHITE,GREEN,v->open("https://big.one/en/trade/PRL-USDT")));
+        ScrollView sc=new ScrollView(this);sc.addView(f);if(receiveDialog!=null)receiveDialog.dismiss();receiveDialog=new AlertDialog.Builder(this).setTitle("用 USDT 购买 Pearl").setView(sc).setNegativeButton("关闭",null).create();receiveDialog.show();PearlDesign.dialog(receiveDialog);
     }
 
     private void renderPriceCard(boolean large){
@@ -476,7 +492,7 @@ public final class MainActivity extends Activity {
     }
 
     private boolean canChangeWallet() {
-        if (!walletFlow.canLeave() || (deFiTools != null && !deFiTools.canLeave()) || (spotTradeTools != null && !spotTradeTools.canLeave()) || (provisioningFlow != null && !provisioningFlow.canLeave())) {
+        if (!walletFlow.canLeave() || (inferenceTools != null && !inferenceTools.canLeave()) || (deFiTools != null && !deFiTools.canLeave()) || (spotTradeTools != null && !spotTradeTools.canLeave()) || (provisioningFlow != null && !provisioningFlow.canLeave())) {
             walletFlow.notice("正在处理钱包操作", "请先完成当前验证或交易，再切换钱包。"); return false;
         }
         return true;
@@ -493,6 +509,7 @@ public final class MainActivity extends Activity {
         publicTools.pause(); crossChainTools.pause(); watchTools.pause(); historyTools.pause();
         if (deFiTools != null) { deFiTools.pause(); if (foreground) deFiTools.resume(); }
         if (spotTradeTools != null) { spotTradeTools.pause(); if (foreground) spotTradeTools.resume(); }
+        if (inferenceTools != null) { inferenceTools.pause(); if (foreground) inferenceTools.resume(); }
         account = null; accountGeneration++; loadingAccount = false; accountError = "";
         accountUpdatedAt = 0; page = "wallet"; scrollPositions.clear();
     }
@@ -587,7 +604,7 @@ public final class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);openMiningWidget(intent);if(intent.getBooleanExtra("show_market",false)){page="market";render();}if(intent.getBooleanExtra("show_receipts",false)){selectReceiptAddress(intent);account=null;accountGeneration++;loadingAccount=false;page="activity";render();refreshAccount();}}
     private void open(String url) { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
     @Override protected void onSaveInstanceState(Bundle state){state.putString("page",page);state.putInt("days",days);state.putString("transaction_filter",transactionFilter);super.onSaveInstanceState(state);}
-    @Override public void onResume() { super.onResume(); foreground = true; if(deFiTools!=null)deFiTools.resume();if(spotTradeTools!=null)spotTradeTools.resume(); AlertNotifications.schedule(this);ReceiptNotifications.schedule(this);if (marketFeed != null) marketFeed.start(); handler.removeCallbacks(priceClock); handler.post(priceClock); handler.removeCallbacks(chartPoll); handler.postDelayed(chartPoll, 60_000); if (walletFlow != null) { walletFlow.resume(); if (provisioningFlow != null) provisioningFlow.resume(); loadWallet(); render(); } handler.removeCallbacks(poll); handler.postDelayed(poll, 90_000); updateLabels(); }
-    @Override public void onPause() { foreground = false; if(deFiTools!=null)deFiTools.pause();if(spotTradeTools!=null)spotTradeTools.pause(); if(receiveDialog!=null){receiveDialog.dismiss();receiveDialog=null;}if(publicTools!=null)publicTools.pause();if(crossChainTools!=null)crossChainTools.pause();if(watchTools!=null)watchTools.pause();if(walletTools!=null)walletTools.pause();if(miningTools!=null)miningTools.pause();if(fortuneTools!=null)fortuneTools.pause();if(historyTools!=null)historyTools.pause();if (marketFeed != null) marketFeed.stop(); handler.removeCallbacks(priceClock); handler.removeCallbacks(chartPoll); if (walletFlow != null) walletFlow.pause(); if (provisioningFlow != null) provisioningFlow.pause(); handler.removeCallbacks(poll); super.onPause(); }
-    @Override public void onDestroy() { if (marketFeed != null) marketFeed.close(); handler.removeCallbacks(priceClock); handler.removeCallbacks(chartPoll); if (walletFlow != null) walletFlow.close(); if (provisioningFlow != null) provisioningFlow.close(); handler.removeCallbacks(poll); accountGeneration++; chartGeneration++;if(historyTools!=null)historyTools.close();if(miningTools!=null)miningTools.close();if(fortuneTools!=null)fortuneTools.close();if(crossChainTools!=null)crossChainTools.close();if(deFiTools!=null)deFiTools.close();if(spotTradeTools!=null)spotTradeTools.close();executor.shutdownNow(); super.onDestroy(); }
+    @Override public void onResume() { super.onResume(); foreground = true; if(inferenceTools!=null)inferenceTools.resume();if(deFiTools!=null)deFiTools.resume();if(spotTradeTools!=null)spotTradeTools.resume(); AlertNotifications.schedule(this);ReceiptNotifications.schedule(this);if (marketFeed != null) marketFeed.start(); handler.removeCallbacks(priceClock); handler.post(priceClock); handler.removeCallbacks(chartPoll); handler.postDelayed(chartPoll, 60_000); if (walletFlow != null) { walletFlow.resume(); if (provisioningFlow != null) provisioningFlow.resume(); loadWallet(); render(); } handler.removeCallbacks(poll); handler.postDelayed(poll, 90_000); updateLabels(); }
+    @Override public void onPause() { foreground = false; if(inferenceTools!=null)inferenceTools.pause();if(deFiTools!=null)deFiTools.pause();if(spotTradeTools!=null)spotTradeTools.pause(); if(receiveDialog!=null){receiveDialog.dismiss();receiveDialog=null;}if(publicTools!=null)publicTools.pause();if(crossChainTools!=null)crossChainTools.pause();if(watchTools!=null)watchTools.pause();if(walletTools!=null)walletTools.pause();if(miningTools!=null)miningTools.pause();if(fortuneTools!=null)fortuneTools.pause();if(historyTools!=null)historyTools.pause();if (marketFeed != null) marketFeed.stop(); handler.removeCallbacks(priceClock); handler.removeCallbacks(chartPoll); if (walletFlow != null) walletFlow.pause(); if (provisioningFlow != null) provisioningFlow.pause(); handler.removeCallbacks(poll); super.onPause(); }
+    @Override public void onDestroy() { if (marketFeed != null) marketFeed.close(); handler.removeCallbacks(priceClock); handler.removeCallbacks(chartPoll); if (walletFlow != null) walletFlow.close(); if (provisioningFlow != null) provisioningFlow.close(); handler.removeCallbacks(poll); accountGeneration++; chartGeneration++;if(historyTools!=null)historyTools.close();if(miningTools!=null)miningTools.close();if(fortuneTools!=null)fortuneTools.close();if(crossChainTools!=null)crossChainTools.close();if(deFiTools!=null)deFiTools.close();if(spotTradeTools!=null)spotTradeTools.close();if(inferenceTools!=null)inferenceTools.close();executor.shutdownNow(); super.onDestroy(); }
 }

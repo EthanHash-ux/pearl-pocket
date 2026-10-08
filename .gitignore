@@ -14,3 +14,4 @@ __pycache__/
 *.pfx
 # Desktop preview is a separate local demo; this repository contains the Android wallet.
 preview/
+merchant-data/

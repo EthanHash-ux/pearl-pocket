@@ -4,7 +4,7 @@ Pearl Pocket（掌珠钱包）是基于 Pearl Research Labs 官方协议代码�
 
 ## 安装与使用
 
-当前版本 **0.11.0**。仓库公开，可在 **Releases → v0.11.0 → Assets** 下载 `pearl-wallet-android-0.11.0.apk`；本地构建文件保存在 `artifacts/`。最低 Android 8.0，支持 ARM64 手机与 x86_64 模拟器。此包关闭 Android 调试权限，使用独立本地开发证书签名；仍是未经独立安全审计的开发测试版本。
+当前版本 **0.12.0**。仓库公开，可在 **Releases → v0.12.0 → Assets** 下载 `pearl-wallet-android-0.12.0.apk`；本地构建文件保存在 `artifacts/`。最低 Android 8.0，支持 ARM64 手机与 x86_64 模拟器。此包关闭 Android 调试权限，使用独立本地开发证书签名；仍是未经独立安全审计的开发测试版本。
 
 1. 在手机设置中启用锁屏 PIN 或密码，然后打开应用。
 2. 选择「创建手机钱包」，验证手机解锁，设置至少 10 个字符的钱包密码。
@@ -18,6 +18,8 @@ Pearl Pocket（掌珠钱包）是基于 Pearl Research Labs 官方协议代码�
 ## 已实现功能
 
 - 多个独立钱包的创建、导入、命名与切换；英文 BIP39 助记词恢复、逐个离线备份与验证。
+- USDT 购买入口：打开 BigONE 的 PRL/USDT 现货页面，显示参考报价并复制当前钱包的 Pearl 主网提现地址。订单在交易所账户完成，未接入其私有交易 API；保留独立的 PRL/USDC 交易入口。
+- PRL 支付 AI 推理：商家模型与价格、调用次数账单、双重验证付款、到账后开通 API 额度、文本试调用、调用记录与不明结果保护。包含可运行的商家服务、幂等计费和离线收款恢复工具；尚无已部署公共商家，需配置域名、收款 xpub 与有效上游 Key。详见 [AI 推理服务部署与协议](docs/AI_INFERENCE.md)。
 - 原生 PRL / Arbitrum USDC 现货：pearl-trade 充值、本机签署保护限价买卖与撤单、平台余额、向本钱包提现和 USDC 链上净额核验。平台托管交易余额，提现需运营方处理；主网实单尚未验证。详见 [现货交易使用范围](docs/SPOT_TRADING.md)。
 - Ethereum 主网 Aave V3 USDC 借贷流动性：每钱包 BIP44 地址、本机逐笔授权 / 存款 / 赎回签名、含利息仓位、浮动 APR、gas 预览与原签名交易恢复。详见 [DeFi 使用范围](docs/DEFI.md)。
 - 主网余额、未确认金额、最近 10 笔交易、浏览器完整历史；余额隐藏与接收 / 发送筛选。
@@ -64,7 +66,7 @@ Pearl Pocket（掌珠钱包）是基于 Pearl Research Labs 官方协议代码�
 
 Keystore 保护的是加密密钥；Pearl 的 Schnorr、DeFi 的 Ethereum ECDSA 和现货请求的 EIP-712 签名在应用进程中完成，签名期间种子与私钥会短暂进入内存。手机被控制或助记词泄露时，不能保证资金安全。
 
-联网只传输公开地址、行情请求和签名交易；不传输助记词、种子、私钥或钱包密码。HTTPS/WSS 使用 Android 默认证书和主机名验证，禁用明文请求和跳转，允许官方 Blockbook、BigONE、CoinGecko、HeroMiners Pearl 及新增只读桥 / Lighter / 固定 Ethereum RPC 服务。个人矿工查询会发送公开地址。公开行情订阅不包含钱包地址，也不需要交易所账户或 API 密钥。新增跨链与价差只读服务见 [跨链说明](docs/CROSS_CHAIN.md)；DeFi 的独立 RPC 边界、固定合约和签名限制见 [DeFi 说明](docs/DEFI.md)。现货另使用固定 pearl-trade REST 及 Arbitrum 只读 RPC，账户绑定、托管及 EIP-712 边界见 [现货说明](docs/SPOT_TRADING.md)。该版本依赖官方索引服务判断余额、确认和未花费状态，没有实现独立 SPV 验证；服务可看到查询的地址，也可影响可用性与建议费率。手续费会在签名前展示。
+链上操作联网传输公开地址、行情请求和签名交易；不传输助记词、种子、私钥或钱包密码。HTTPS/WSS 使用 Android 默认证书和主机名验证，禁用明文请求和跳转，允许官方 Blockbook、BigONE、CoinGecko、HeroMiners Pearl 及新增只读桥 / Lighter / 固定 Ethereum RPC 服务。个人矿工查询会发送公开地址。公开行情订阅不包含钱包地址，也不需要交易所账户或 API 密钥。新增跨链与价差只读服务见 [跨链说明](docs/CROSS_CHAIN.md)；DeFi 的独立 RPC 边界、固定合约和签名限制见 [DeFi 说明](docs/DEFI.md)。现货另使用固定 pearl-trade REST 及 Arbitrum 只读 RPC，账户绑定、托管及 EIP-712 边界见 [现货说明](docs/SPOT_TRADING.md)。AI 请求向用户明确绑定的 HTTPS 商家发送独立 API 凭据、账单 / 付款交易 ID、提示词和调用编号，商家转发提示词到其模型上游；钱包不向商家发送助记词、私钥或密码，AI 凭据与记录独立加密保存。该版本依赖官方索引服务判断余额、确认和未花费状态，没有实现独立 SPV 验证；服务可看到查询的地址，也可影响可用性与建议费率。手续费会在签名前展示。
 
 行情在应用前台即时连接，推送每次交易所 ticker 更新；后台断开，回到前台重新订阅；用户配置价格提醒后，另由系统后台任务定期查询公开报价。断线采用递增间隔重连，同时每 15 秒刷新 REST 行情；没有新的推送超过 45 秒也会刷新。页面明确显示实时推送、定时刷新、参考行情或过期状态，以及本机接收时间。交易所的成交价格在没有新成交时可能保持不变。
 
