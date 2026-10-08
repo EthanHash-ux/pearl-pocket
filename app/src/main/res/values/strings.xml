@@ -1,4 +1,5 @@
 <resources>
+    <string name="spot_deposit_verified">我已在官网用同一账户核对完整充值地址，并知晓充值后由平台控制 PRL</string>
     <string name="mnemonic_twelve">12 个词</string>
     <string name="mnemonic_fifteen">15 个词</string>
     <string name="mnemonic_eighteen">18 个词</string>

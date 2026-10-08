@@ -28,6 +28,7 @@ final class WalletFlow {
     private final WalletVault vault;
     private final PendingTransfer pending;
     private final PearlApi api;
+    private final SpotTradeApi spotApi;
     private final PublicTools publicTools;
     private final String slot;
     private String scanAddress="", scanAmount="";
@@ -43,7 +44,8 @@ final class WalletFlow {
     private final android.os.Handler recoveryTimeout = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable expireRecovery = () -> { clearRecovery(); afterAuth = null; };
     WalletFlow(Activity a, Host h, PearlApi api) { this(a, h, api, WalletCatalog.LEGACY); }
-    WalletFlow(Activity a, Host h, PearlApi api, String slot) { activity = a; host = h; this.api = api; this.slot = WalletCatalog.validSlot(slot); vault = new WalletVault(a, slot); pending = new PendingTransfer(a, slot); publicTools=new PublicTools(a); }
+    WalletFlow(Activity a, Host h, PearlApi api, String slot) { this(a,h,api,slot,new SpotTradeApi()); }
+    WalletFlow(Activity a, Host h, PearlApi api, String slot,SpotTradeApi spotApi) { activity = a; host = h; this.api = api; this.spotApi=spotApi; this.slot = WalletCatalog.validSlot(slot); vault = new WalletVault(a, slot); pending = new PendingTransfer(a, slot); publicTools=new PublicTools(a); }
     boolean canLeave() { return !busy && !authWaiting; }
     boolean awaitingAuth() { return authWaiting; }
     boolean exists() { return vault.exists(); }
@@ -241,6 +243,28 @@ final class WalletFlow {
             }));
         });
     }
+    void tradeSign(JSONObject preview, PublicResult callback) {
+        if (!exists() || busy || authWaiting) return;
+        if (!backedUp()) { notice("先完成离线备份", "验证助记词备份后再进行现货买卖。"); return; }
+        final JSONObject plan;
+        try { plan = new JSONObject(preview.toString()); }
+        catch (Exception e) { notice("现货预览无效", error(e)); return; }
+        unlock("确认 pearl-trade 现货订单或提现", entropy -> {
+            String from=NativeCore.ethereumIdentity(entropy).getString("address");
+            if(!from.equalsIgnoreCase(plan.getString("from")))throw new IllegalArgumentException("现货账户不属于当前钱包");
+            SpotTradeStore store=new SpotTradeStore(activity,slot,from,address());
+            if(store.pending()!=null)throw new IllegalArgumentException("先处理上一笔现货请求");
+            JSONObject auth=NativeCore.tradeSign(entropy,plan);store.save(plan,auth);
+            int token=generation;worker.execute(()->ui(token,()->{try{callback.ready(auth);}catch(Exception e){notice("现货请求已保存，结果待确认",error(e));}}));
+        });
+    }
+    void spotDeposit(SpotTradeStore.Deposit trade) {
+        if(!exists()||busy||authWaiting)return;
+        if(!backedUp()){notice("先完成离线备份","验证助记词备份后再充值。");return;}
+        try{if(!slot.equals(trade.slot)||!address().equals(trade.pearl))throw new IllegalArgumentException("付款钱包已切换，请重新预览");if(pending.load()!=null){pendingStatus();return;}}catch(Exception e){notice("待确认交易需要检查",error(e));return;}
+        busy=true;int token=generation;
+        worker.execute(()->{try{trade.recheck(activity,spotApi);JSONObject payment=api.payment(address(),trade.deposit,trade.quantity);JSONObject quote=NativeCore.call(new JSONObject().put("action","plan").put("payment",payment));ui(token,()->review(quote,null,trade));}catch(Exception e){ui(token,()->notice("无法预览现货充值",error(e)));}finally{busy=false;}});
+    }
     private void showBackup(String words) {
         String[] list = words.split(" "); LinearLayout view = form();
         view.addView(label("按顺序抄写到纸上并离线保管。持有这些词的人可以转走资金。请勿截图、复制到剪贴板或发给他人。"));
@@ -335,11 +359,15 @@ final class WalletFlow {
     }
     private void review(JSONObject quote) { review(quote,null); }
     private void review(JSONObject quote,BridgeApi.MintPlan bridge) {
+        review(quote,bridge,null);
+    }
+    private void review(JSONObject quote,BridgeApi.MintPlan bridge,SpotTradeStore.Deposit trade) {
         try {
             JSONObject payment = quote.getJSONObject("payment");
             if (!address().equals(payment.getString("from"))) throw new IllegalArgumentException("付款钱包与转账预览不一致，请重新操作");
             String message = "付款钱包 · " + host.name() + "\n" + address() + "\n\n收款地址\n" + payment.getString("to") + "\n\n金额  " + PearlAmount.format(new BigInteger(payment.getString("amount"))) + " PRL\n手续费  " + PearlAmount.format(new BigInteger(quote.getString("fee"))) + " PRL\n合计  " + PearlAmount.format(new BigInteger(payment.getString("amount")).add(new BigInteger(quote.getString("fee")))) + " PRL"+(payment.optBoolean("sweep",false)?"\n发送全部可用余额（已扣手续费），不生成找零。未确认与未成熟奖励不参与。":"")+"\n\n预览有效期 5 分钟。确认后在手机签名并提交到 Pearl 主网。";
             if(bridge!=null)message += "\n\n"+bridge.summary()+"\n签名前再次核对桥报价。核对后 2 分钟内完成验证；桥状态仍可能随后变化。";
+            if(trade!=null)message += "\n\n充值到 pearl-trade 平台账户\n"+trade.eth+"\n充值后由平台控制 PRL。通常等待 6 个 Pearl 确认再记入可交易余额；这是充值，之后须另行确认卖单和 USDC 提现。";
             final long[] bridgeCheckedAt={0};
             Runnable approve=()->unlock("确认并发送这笔转账", entropy -> {
                         if (pending.load() != null) throw new IllegalArgumentException("已有交易等待确认");
@@ -347,18 +375,20 @@ final class WalletFlow {
                             if(bridgeCheckedAt[0]<=0||android.os.SystemClock.elapsedRealtime()-bridgeCheckedAt[0]>120_000)throw new IllegalArgumentException("跨链核对已过期，请重新报价");
                             if(!bridge.deposit.equals(payment.getString("to"))||!bridge.quote.amount.toString().equals(payment.getString("amount")))throw new IllegalArgumentException("跨链交易与已确认报价不一致");
                         }
+                        if(trade!=null){if(bridgeCheckedAt[0]<=0||android.os.SystemClock.elapsedRealtime()-bridgeCheckedAt[0]>120_000||!trade.deposit.equals(payment.getString("to"))||!trade.quantity.toString().equals(payment.getString("amount")))throw new IllegalArgumentException("现货充值核对已过期或金额不一致");}
                         JSONObject signed = NativeCore.sign(entropy, quote);
                         signed.put("to", payment.getString("to")).put("amount", payment.getString("amount"));
                         if(bridge!=null){new BridgeBook(PublicStore.of(activity)).save(true,signed.getString("txid"),bridge.eth);signed.put("bridgeEth",bridge.eth);}
+                        if(trade!=null){new SpotTradeStore(activity,slot,trade.eth,address()).depositSent(signed.getString("txid"),trade.deposit,payment.getString("amount"));signed.put("spotTrade",true);}
                         pending.save(signed);
                         // Network submission is queued after unlock's finally wipes entropy/password.
                         int token = generation; worker.execute(() -> submit(signed, token));
                     });
             show(new AlertDialog.Builder(activity).setTitle(bridge==null?"确认转账":"确认 PRL 转入跨链桥").setMessage(message).setNegativeButton("取消", null)
                     .setPositiveButton("验证并发送", (d,w) -> {
-                        if(bridge==null){approve.run();return;}
+                        if(bridge==null&&trade==null){approve.run();return;}
                         if(busy||authWaiting)return;busy=true;int token=generation;
-                        worker.execute(()->{try{new BridgeApi().recheck(bridge,new BridgeBook(PublicStore.of(activity)));
+                        worker.execute(()->{try{if(bridge!=null)new BridgeApi().recheck(bridge,new BridgeBook(PublicStore.of(activity)));else trade.recheck(activity,spotApi);
                             ui(token,()->{busy=false;bridgeCheckedAt[0]=android.os.SystemClock.elapsedRealtime();approve.run();});
                         }catch(Exception e){ui(token,()->notice("跨链核对未通过",error(e)));}finally{busy=false;}});
                     }).create());

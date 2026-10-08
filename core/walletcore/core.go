@@ -82,13 +82,15 @@ type Quote struct {
 	Expires int64   `json:"expires"`
 }
 type Request struct {
-	Action   string       `json:"action"`
-	Entropy  string       `json:"entropy"`
-	Mnemonic string       `json:"mnemonic"`
-	Raw      string       `json:"raw"`
-	Payment  Payment      `json:"payment"`
-	Quote    Quote        `json:"quote"`
-	Ethereum EthereumPlan `json:"ethereum"`
+	Action    string       `json:"action"`
+	Entropy   string       `json:"entropy"`
+	Mnemonic  string       `json:"mnemonic"`
+	Raw       string       `json:"raw"`
+	Payment   Payment      `json:"payment"`
+	Quote     Quote        `json:"quote"`
+	Ethereum  EthereumPlan `json:"ethereum"`
+	Trade     TradePlan    `json:"trade"`
+	TradeAuth TradeAuth    `json:"tradeAuth"`
 }
 type Identity struct {
 	Address  string `json:"address"`
@@ -405,6 +407,10 @@ func Execute(input string) (output string) {
 		return `{"error":"请求格式无效"}`
 	}
 	switch r.Action {
+	case "tradeintent":
+		result, e = TradeIntent(r.Trade)
+	case "tradeverify":
+		result, e = TradeVerify(r.Trade, r.TradeAuth)
 	case "ethintent":
 		result, e = EthereumIntent(r.Ethereum)
 	case "ethtransaction":
@@ -433,11 +439,13 @@ func Execute(input string) (output string) {
 			}
 			wipe(b)
 		}
-	case "identity", "address", "sign", "ethidentity", "ethsign":
+	case "identity", "address", "sign", "ethidentity", "ethsign", "tradesign":
 		var b []byte
 		b, e = entropy(r.Entropy)
 		if e == nil {
-			if r.Action == "ethidentity" {
+			if r.Action == "tradesign" {
+				result, e = TradeSign(b, r.Trade)
+			} else if r.Action == "ethidentity" {
 				result, e = EthereumIdentity(b)
 			} else if r.Action == "ethsign" {
 				result, e = EthereumSign(b, r.Ethereum)

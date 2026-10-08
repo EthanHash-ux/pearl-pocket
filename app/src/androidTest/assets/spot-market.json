@@ -1,0 +1,50 @@
+{
+  "markets": [
+    {
+      "market": "PRL",
+      "base": "PRL",
+      "quote": "USDC-ARB",
+      "label": "PRL/USDC",
+      "quote_asset": {
+        "code": "USDC-ARB",
+        "decimals": 6,
+        "chain": "arb",
+        "contract": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+        "created_at": 1779436514.063
+      },
+      "base_asset": {
+        "code": "PRL",
+        "decimals": 8,
+        "chain": "pearl",
+        "contract": null,
+        "created_at": 1779436514.063
+      },
+      "constants": {
+        "price_tick_micro": 100,
+        "lot_units": "1000000",
+        "min_order_units": "100000000",
+        "base_decimals": 8,
+        "quote_decimals": 6
+      },
+      "fees": {
+        "fee_bps": 8,
+        "referred_fee_bps": 7,
+        "buy_fee_bps": 8,
+        "buy_referred_fee_bps": 7,
+        "sell_fee_bps": 0,
+        "sell_referred_fee_bps": 0
+      }
+    }
+  ],
+  "fees": {
+    "withdrawal_fees": {
+      "PRL": "50000000",
+      "USDC-ARB": "500000"
+    }
+  },
+  "chains": {
+    "42161": {
+      "vault": "0x779fb955d033dc12e8b08a07d69f4c1973aa0c37"
+    }
+  }
+}

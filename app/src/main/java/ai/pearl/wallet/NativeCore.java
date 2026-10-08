@@ -28,4 +28,7 @@ public final class NativeCore {
     static JSONObject ethereumSign(byte[] entropy, JSONObject plan) throws Exception {
         return call(new JSONObject().put("action", "ethsign").put("entropy", Base64.encodeToString(entropy, Base64.NO_WRAP)).put("ethereum", plan));
     }
+    static JSONObject tradeSign(byte[] entropy, JSONObject plan) throws Exception {
+        return call(new JSONObject().put("action", "tradesign").put("entropy", Base64.encodeToString(entropy, Base64.NO_WRAP)).put("trade", plan));
+    }
 }
